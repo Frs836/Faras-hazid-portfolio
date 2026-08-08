@@ -11,12 +11,17 @@ const Hero3D = lazy(() => import('../3d/Hero3D').then((m) => ({ default: m.Hero3
 const DEFAULT_MARQUEE = ['UI/UX Design', 'Brand Identity', 'Graphic Design', 'Web Development', 'Print Layout', 'Social Media'];
 
 export const HomePage: React.FC = () => {
-  const { t, setCurrentPage, projects, setSelectedProject, skills, theme, getContent, getContentList } = useApp();
+  const { t, setCurrentPage, projects, setSelectedProject, skills, theme, siteSettings, getContent, getContentList } = useApp();
 
   const featuredProjects = projects.filter((p) => p.featured).slice(0, 3);
   const marqueeWords = getContentList('home', 'marquee.words').length
     ? getContentList('home', 'marquee.words')
     : DEFAULT_MARQUEE;
+
+  const heroName = siteSettings?.heroTitle || 'FARAS HAZID';
+  const heroRole = siteSettings?.heroSubtitle || getContent('home', 'hero.role', t.about.bioRole);
+
+  const heroTitleLines = heroName.split('\n').filter(Boolean);
 
   const stats = [
     { label: getContent('home', 'stats.label_project', t.home.quickStats.projects), val: getContent('home', 'stats.val_project', '45+') },
@@ -44,11 +49,15 @@ export const HomePage: React.FC = () => {
             <p className="text-sm sm:text-base text-ink-muted font-medium">{getContent('home', 'hero.greeting', t.about.bioGreeting)}</p>
 
             <h1 className="display-font font-bold tracking-tight text-ink leading-[0.92] text-[clamp(3rem,13vw,6.5rem)]">
-              FARAS<span className="text-strong">.</span>
-              <span className="block">HAZID</span>
+              {heroTitleLines.map((line, i) => (
+                <span key={i} className="block">
+                  {line}
+                  {i === 0 && <span className="text-strong">.</span>}
+                </span>
+              ))}
             </h1>
 
-            <p className="mono-label text-ink-muted">{getContent('home', 'hero.role', t.about.bioRole)}</p>
+            <p className="mono-label text-ink-muted">{heroRole}</p>
             <p className="text-base text-ink-muted leading-relaxed max-w-lg">{getContent('home', 'hero.bio', t.home.heroBio)}</p>
 
             <div className="flex flex-wrap items-center gap-3 pt-2">

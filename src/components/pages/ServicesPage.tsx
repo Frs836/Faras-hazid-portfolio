@@ -9,17 +9,19 @@ export const ServicesPage: React.FC = () => {
   const { t, services, packages, faqs, language, addToast, getContent } = useApp();
   const [openFaqId, setOpenFaqId] = useState<string | null>(faqs[0]?.id || null);
 
+  // DB-first: any field edited in the dashboard wins; the static i18n map
+  // only fills values that the DB row does not already carry.
   const localizedPackages = packages.map((pkg) => {
     const pkgTrans = t.services.packagesData?.[pkg.id];
     if (!pkgTrans) return pkg;
     return {
       ...pkg,
-      name: pkgTrans.name,
-      badge: pkgTrans.badge,
-      period: pkgTrans.period,
-      description: pkgTrans.description,
-      deliveryTime: pkgTrans.deliveryTime,
-      features: pkgTrans.features,
+      name: pkg.name || pkgTrans.name,
+      badge: pkg.badge || pkgTrans.badge,
+      period: pkg.period || pkgTrans.period,
+      description: pkg.description || pkgTrans.description,
+      deliveryTime: pkg.deliveryTime || pkgTrans.deliveryTime,
+      features: pkg.features?.length ? pkg.features : pkgTrans.features,
     };
   });
 
@@ -28,9 +30,9 @@ export const ServicesPage: React.FC = () => {
     if (!srvTrans) return srv;
     return {
       ...srv,
-      title: srvTrans.title,
-      description: srvTrans.description,
-      deliverables: srvTrans.deliverables,
+      title: srv.title || srvTrans.title,
+      description: srv.description || srvTrans.description,
+      deliverables: srv.deliverables?.length ? srv.deliverables : srvTrans.deliverables,
     };
   });
 

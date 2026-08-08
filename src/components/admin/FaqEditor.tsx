@@ -43,18 +43,26 @@ export const FaqEditor: React.FC = () => {
   };
 
   const autoTranslate = async () => {
+    let allOk = true;
     for (const f of drafts) {
-      const qSrc = f.question.en || '';
-      const aSrc = f.answer.en || '';
       const qNext: any = { ...f.question };
       const aNext: any = { ...f.answer };
       for (const l of LANGS) {
-        if (!qNext[l] && qSrc) qNext[l] = await translateText(qSrc, l);
-        if (!aNext[l] && aSrc) aNext[l] = await translateText(aSrc, l);
+        if (qNext[l]) continue;
+        const qSrc = LANGS.filter((x) => x !== l).map((x) => f.question[x] || '').find((v) => v);
+        const aSrc = LANGS.filter((x) => x !== l).map((x) => f.answer[x] || '').find((v) => v);
+        try {
+          if (qSrc) qNext[l] = await translateText(qSrc, l);
+          if (aSrc) aNext[l] = await translateText(aSrc, l);
+        } catch {
+          allOk = false;
+        }
       }
       setDrafts((prev) => prev.map((x) => x.id === f.id ? { ...x, question: qNext, answer: aNext } : x));
     }
-    addToast('Auto-translate done', 'FAQs filled with Gemini.', 'success');
+    addToast(allOk ? 'Auto-translate done' : 'Auto-translate partial', allOk
+      ? 'FAQs filled in all missing languages (Gemini).'
+      : 'Some translations failed — check the server key.', allOk ? 'success' : 'warning');
   };
 
   return (

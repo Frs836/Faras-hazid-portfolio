@@ -53,6 +53,8 @@ import {
   fetchSkillsFromSupabase,
   saveExperiencesToSupabase,
   saveSkillsToSupabase,
+  savePackagesToSupabase,
+  fetchPackagesFromSupabase,
 } from '../services/apiService';
 
 export type PageView = 'home' | 'about' | 'portfolio' | 'services' | 'contact' | 'secret-admin';
@@ -255,6 +257,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // so a stale localStorage value never overwrites fresher DB data.
   const loadedExpRef = useRef(false);
   const loadedSkillsRef = useRef(false);
+  const loadedPackagesRef = useRef(false);
 
   const [analytics, setAnalytics] = useState<AnalyticsData>(() => {
     const saved = localStorage.getItem('clayfolio_analytics');
@@ -328,6 +331,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loadedSkillsRef.current = true;
       }
     });
+    // Packages propagation (admin edits reach visitors)
+    fetchPackagesFromSupabase().then((list) => {
+      if (list && list.length > 0) {
+        setPackages(list);
+        loadedPackagesRef.current = true;
+      }
+    });
     // Load editable page content; auto-seed once if DB empty
     fetchPageContent().then((rows) => {
       if (rows.length > 0) {
@@ -370,6 +380,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, 800);
     return () => clearTimeout(t);
   }, [skills]);
+
+  useEffect(() => {
+    if (!loadedPackagesRef.current) return;
+    const t = setTimeout(() => {
+      savePackagesToSupabase(packages).catch(() => {});
+    }, 800);
+    return () => clearTimeout(t);
+  }, [packages]);
 
   useEffect(() => {
     localStorage.setItem('clayfolio_packages', JSON.stringify(packages));

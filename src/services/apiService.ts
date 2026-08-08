@@ -512,6 +512,32 @@ export const syncAllDataToSupabase = async (payload: {
 };
 
 // Packages CRUD for Supabase
+export const fetchPackagesFromSupabase = async (): Promise<PricingPackage[] | null> => {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.from('packages').select('*').order('created_at');
+    if (!error && data && data.length > 0) {
+      return data.map((x: any) => ({
+        id: x.id,
+        name: x.title || '',
+        badge: x.badge || '',
+        priceUSD: x.price_usd ?? 0,
+        priceIDR: x.price || '',
+        period: x.period || 'per project',
+        description: x.description || '',
+        features: x.features || [],
+        recommendedFor: x.recommended_for || '',
+        deliveryTime: x.timeline || '',
+        popular: x.is_popular ?? false,
+      }));
+    }
+  } catch (err) {
+    console.warn('Supabase fetch packages exception:', err);
+  }
+  return null;
+};
+
 export const savePackageToSupabase = async (pkg: PricingPackage): Promise<boolean> => {
   let saved = false;
   const supabase = getSupabase();
@@ -883,6 +909,46 @@ export const saveSkillsToSupabase = async (skills: SkillItem[]): Promise<boolean
     return true;
   } catch (err: any) {
     console.warn('saveSkillsToSupabase exception:', err);
+    return false;
+  }
+};
+
+export const savePackagesToSupabase = async (packages: PricingPackage[]): Promise<boolean> => {
+  const supabase = getSupabase();
+  if (!supabase || packages.length === 0) return false;
+  try {
+    const rows = packages.map((pkg) => ({
+      id: pkg.id,
+      title: pkg.name || '',
+      description: pkg.description || '',
+      price: pkg.priceIDR || '',
+      price_usd: pkg.priceUSD || 0,
+      timeline: pkg.deliveryTime || '',
+      features: pkg.features || [],
+      is_popular: pkg.popular ?? false,
+      badge: pkg.badge || '',
+      recommended_for: pkg.recommendedFor || '',
+      period: pkg.period || 'per project',
+      updated_at: new Date().toISOString(),
+    }));
+    const { error } = await supabase.from('packages').upsert(rows, { onConflict: 'id' });
+    if (error) {
+      console.warn('savePackagesToSupabase error:', error.message);
+      return false;
+    }
+    try {
+      const keep = rows.map((r) => r.id);
+      const { data: existing } = await supabase.from('packages').select('id');
+      const stale = (existing || []).map((r: any) => r.id).filter((id: string) => !keep.includes(id));
+      if (stale.length > 0) {
+        await supabase.from('packages').delete().in('id', stale);
+      }
+    } catch (reconErr) {
+      console.warn('savePackagesToSupabase reconcile error:', reconErr);
+    }
+    return true;
+  } catch (err: any) {
+    console.warn('savePackagesToSupabase exception:', err);
     return false;
   }
 };
