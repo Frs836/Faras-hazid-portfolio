@@ -44,18 +44,15 @@ export const PortfolioPage: React.FC = () => {
         </ScrollReveal>
 
         <ScrollReveal delay={0.1}>
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-t hairline pt-6">
-            {/* Category filter */}
-            <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-t hairline pt-6">
+            {/* Category filter — horizontal scroll on mobile, wrap on desktop */}
+            <div className="flex items-center gap-2 -mx-4 px-4 lg:mx-0 lg:px-0 lg:flex-wrap overflow-x-auto scrollbar-none">
               {CATEGORIES.map((cat) => (
                 <button
                   key={cat}
                   onClick={() => setActiveCategory(cat)}
-                  className={`mono-label px-3 py-2 rounded-sm transition-colors ${
-                    activeCategory === cat
-                      ? 'bg-ink text-paper'
-                      : 'text-ink-muted hover:text-ink hover:bg-paper2'
-                  }`}
+                  aria-pressed={activeCategory === cat}
+                  className="filter-pill shrink-0"
                 >
                   {cat === 'All' ? getContent('portfolio', 'filters.all', t.portfolio.allCategories) : cat}
                 </button>
@@ -63,19 +60,19 @@ export const PortfolioPage: React.FC = () => {
             </div>
 
             {/* Search */}
-            <div className="relative min-w-[240px]">
-              <Search className="w-4 h-4 text-ink-faint absolute left-3 top-1/2 -translate-y-1/2" />
+            <div className="relative w-full lg:w-[280px] shrink-0">
+              <Search className="w-4 h-4 text-ink-faint absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-[1]" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t.portfolio.searchPlaceholder}
-                className="field-input pl-9 pr-9"
+                className="field-input search-input"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink p-1 -mr-1"
                   aria-label="Clear search"
                 >
                   <X className="w-4 h-4" />
