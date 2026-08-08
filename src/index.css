@@ -1,0 +1,564 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+/* ============================================================
+   DESIGN TOKENS — see DESIGN.md §2
+   Default theme: light. Dark flips via html[data-theme="dark"].
+   ============================================================ */
+
+:root {
+  --bg: #faf9f6;
+  --bg-2: #f1ece2;
+  --surface: #ffffff;
+  --fg: #101010;
+  --fg-muted: #6e6b66;
+  --fg-faint: #a6a69e;
+  --border: #e5e2da;
+  --accent: #e08a20;
+  --accent-ink: #331e00;
+  --accent-strong: #9a5c00;
+  --accent-2: #7c5cff;
+  --glass-bg: rgba(250, 249, 246, 0.6);
+  --glass-bg-strong: rgba(250, 249, 246, 0.86);
+  --btn-bg: #14161a;
+}
+
+html[data-theme="dark"] {
+  --bg: #0a0a0b;
+  --bg-2: #161318;
+  --surface: #1a1a20;
+  --fg: #f4f4f2;
+  --fg-muted: #9c9c96;
+  --fg-faint: #5c5c57;
+  --border: #26262b;
+  --accent: #f5a93a;
+  --accent-ink: #2a1800;
+  --accent-strong: #e8a336;
+  --accent-2: #9d85ff;
+  --glass-bg: rgba(10, 10, 11, 0.62);
+  --glass-bg-strong: rgba(10, 10, 11, 0.84);
+  --btn-bg: #26282f;
+}
+
+@theme inline {
+  --color-paper: var(--bg);
+  --color-paper2: var(--bg-2);
+  --color-surface: var(--surface);
+  --color-ink: var(--fg);
+  --color-ink-muted: var(--fg-muted);
+  --color-ink-faint: var(--fg-faint);
+  --color-line: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-strong: var(--accent-strong);
+  --color-accent2: var(--accent-2);
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* ============================================================
+   BASE
+   ============================================================ */
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  ::selection {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+
+  [dir="rtl"] {
+    text-align: right;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: 2px;
+  }
+
+  button,
+  [role="button"] {
+    cursor: pointer;
+  }
+  button {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+}
+
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--fg-faint);
+  border-radius: 999px;
+  border: 2px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fg-muted);
+}
+
+/* ============================================================
+   UTILITIES (editorial system)
+   ============================================================ */
+
+@layer utilities {
+  .mono-label {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .section-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    color: var(--fg-muted);
+    text-transform: uppercase;
+  }
+
+  .hairline {
+    border-color: var(--border);
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+  }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: var(--fg);
+    color: var(--bg);
+    font-weight: 600;
+    font-size: 0.875rem;
+    padding: 0.8rem 1.5rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--fg);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.08);
+    transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.22s cubic-bezier(0.22, 1, 0.36, 1), background 0.2s, color 0.2s, border-color 0.2s;
+    cursor: pointer;
+  }
+  .btn-primary:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+    transform: translateY(-2px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06), 0 10px 22px rgba(0, 0, 0, 0.12);
+  }
+  .btn-primary:active {
+    transform: translateY(1px) scale(0.97);
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.18), 0 1px 2px rgba(0, 0, 0, 0.05);
+    filter: brightness(0.98);
+  }
+
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: transparent;
+    color: var(--fg);
+    font-weight: 600;
+    font-size: 0.875rem;
+    padding: 0.8rem 1.5rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.22s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s, background 0.2s;
+    cursor: pointer;
+  }
+  .btn-ghost:hover {
+    border-color: var(--fg);
+    background: var(--bg-2);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+  }
+  .btn-ghost:active {
+    transform: translateY(1px) scale(0.97);
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.08);
+  }
+
+  .btn-accent {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 700;
+    font-size: 0.875rem;
+    padding: 0.8rem 1.5rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--accent);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1), 0 6px 18px rgba(224, 138, 32, 0.25);
+    transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.22s cubic-bezier(0.22, 1, 0.36, 1), filter 0.2s;
+    cursor: pointer;
+  }
+  .btn-accent:hover {
+    filter: brightness(1.05);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1), 0 12px 26px rgba(224, 138, 32, 0.35);
+  }
+  .btn-accent:active {
+    transform: translateY(1px) scale(0.97);
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(224, 138, 32, 0.2);
+    filter: brightness(0.97);
+  }
+
+  /* Realistic tactile press for plain buttons / interactive tiles */
+  .lift-card {
+    transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s, background 0.2s;
+    will-change: transform;
+  }
+  .lift-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04), 0 12px 28px rgba(0, 0, 0, 0.12);
+  }
+  .lift-card:active {
+    transform: translateY(0) scale(0.98);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 3px 8px rgba(0, 0, 0, 0.06);
+  }
+
+  .glass-nav {
+    position: relative;
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px) saturate(150%);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
+    border: 1px solid rgba(16, 16, 16, 0.08);
+    box-shadow: 0 1px 1px rgba(16, 16, 16, 0.03), 0 8px 24px rgba(16, 16, 16, 0.1);
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1), background 0.3s;
+  }
+  .glass-nav:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 4px rgba(16, 16, 16, 0.04), 0 14px 34px rgba(16, 16, 16, 0.16);
+  }
+  .glass-nav-scrolled {
+    background: var(--glass-bg-strong);
+    box-shadow: 0 2px 4px rgba(16, 16, 16, 0.04), 0 14px 40px rgba(16, 16, 16, 0.18);
+  }
+  html[data-theme="dark"] .glass-nav {
+    border-color: rgba(244, 244, 242, 0.1);
+    box-shadow: 0 1px 1px rgba(255, 255, 255, 0.03), 0 8px 26px rgba(0, 0, 0, 0.5);
+  }
+  html[data-theme="dark"] .glass-nav:hover,
+  html[data-theme="dark"] .glass-nav-scrolled {
+    box-shadow: 0 2px 4px rgba(255, 255, 255, 0.03), 0 14px 40px rgba(0, 0, 0, 0.6);
+  }
+  /* Top light rim (light source from above) */
+  .glass-nav::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 38%);
+  }
+  html[data-theme="dark"] .glass-nav::before {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 40%);
+  }
+  /* Specular sheen for glass depth */
+  .glass-nav::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    mix-blend-mode: overlay;
+    opacity: 0.5;
+    background: radial-gradient(120% 70% at 75% 0%, rgba(255, 255, 255, 0.4), transparent 55%);
+  }
+  html[data-theme="dark"] .glass-nav::after {
+    opacity: 0.22;
+  }
+
+  .field-input {
+    width: 100%;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    padding: 0.7rem 0.9rem;
+    font-size: 0.875rem;
+    color: var(--fg);
+    outline: none;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .field-input:focus {
+    border-color: var(--fg);
+    background: var(--surface);
+  }
+  .field-input::placeholder {
+    color: var(--fg-faint);
+  }
+
+  .link-underline {
+    position: relative;
+  }
+  .link-underline::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -2px;
+    height: 1px;
+    width: 100%;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: right;
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .link-underline:hover::after,
+  .link-underline.active::after {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+
+  /* film grain overlay */
+  .grain {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    pointer-events: none;
+    opacity: 0.05;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 180px 180px;
+  }
+
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+  .animate-marquee {
+    animation: marquee 40s linear infinite;
+  }
+  .marquee-pause:hover .animate-marquee {
+    animation-play-state: paused;
+  }
+
+  @keyframes float-y {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+.animate-float-y {
+    animation: float-y 6s ease-in-out infinite;
+  }
+
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Thin styled scrollbar for admin tab bar & scroll areas */
+  .admin-wrap ::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+  }
+  .admin-wrap ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .admin-wrap ::-webkit-scrollbar-thumb {
+    background: var(--fg-faint);
+    border-radius: 999px;
+  }
+  .admin-wrap ::-webkit-scrollbar-thumb:hover {
+    background: var(--fg-muted);
+  }
+
+  .display-font {
+    font-family: var(--font-display);
+  }
+}
+
+/* ============================================================
+   MOTION PREFERENCES
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .animate-marquee,
+  .animate-float-y {
+    animation: none !important;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================================
+   LEGACY CLAYMORPHIC SYSTEM — redefined to flat editorial.
+   The .clay-* classes are still referenced across the admin,
+   estimator and modals; we simply retarget their styles so the
+   whole app reads clean (see DESIGN.md §9). Colors come from
+   the utility classes (bg-white etc.) — no background here.
+   ============================================================ */
+
+.clay-card {
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.clay-card:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.clay-card-blue {
+  background: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  color: var(--paper);
+}
+
+.clay-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 600;
+  border-radius: 0.5rem;
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--ink);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.clay-button:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  transform: translateY(-1px);
+}
+
+.clay-button-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: transparent;
+  color: var(--fg);
+  font-weight: 600;
+  border-radius: 0.5rem;
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.clay-button-secondary:hover {
+  border-color: var(--fg);
+  background: var(--bg-2);
+}
+
+.clay-input {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.7rem 0.9rem;
+  color: var(--fg);
+  outline: none;
+  transition: border-color 0.2s, background 0.2s;
+}
+.clay-input:focus {
+  border-color: var(--fg);
+  background: var(--surface);
+}
+
+.clay-pill {
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.clay-pill-active {
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 9999px;
+}
+
+/* ============================================================
+   ADMIN DASHBOARD THEME ALIGNMENT
+   Scoped-to-.admin-wrap remaps so the CMS dashboard reuses the
+   public editorial / gold tokens instead of raw slate + blue.
+   Affects only the dashboard (which is wrapped in .admin-wrap).
+   ============================================================ */
+
+.admin-wrap .bg-white { background-color: var(--surface); }
+.admin-wrap .bg-slate-50,
+.admin-wrap .bg-slate-100 { background-color: var(--bg-2); }
+.admin-wrap .bg-slate-200 { background-color: var(--border); }
+.admin-wrap .bg-slate-800,
+.admin-wrap .bg-slate-900 { background-color: var(--btn-bg); }
+
+.admin-wrap .bg-blue-50,
+.admin-wrap .bg-blue-100 { background-color: var(--bg-2); }
+.admin-wrap .bg-blue-500,
+.admin-wrap .bg-blue-600 { background-color: var(--btn-bg) !important; }
+
+.admin-wrap .text-slate-400 { color: var(--fg-faint); }
+.admin-wrap .text-slate-500,
+.admin-wrap .text-slate-600 { color: var(--fg-muted); }
+.admin-wrap .text-slate-700,
+.admin-wrap .text-slate-800,
+.admin-wrap .text-slate-900 { color: var(--fg); }
+.admin-wrap .text-blue-600,
+.admin-wrap .text-blue-700,
+.admin-wrap .text-blue-800 { color: var(--accent-strong); }
+
+.admin-wrap .border-slate-100 { border-color: transparent; }
+.admin-wrap .border-slate-200,
+.admin-wrap .border-slate-800 { border-color: var(--border); }
+.admin-wrap .border-blue-200 { border-color: var(--border); }
+.admin-wrap .border-blue-500 { border-color: var(--accent-strong); }
+
+.admin-wrap .bg-amber-400 { background-color: var(--accent); color: var(--accent-ink); }
+.admin-wrap .text-blue-100 { color: var(--accent-strong); }
+.admin-wrap .border-blue-400\30,
+.admin-wrap .border-blue-400 { border-color: var(--accent-strong); }
