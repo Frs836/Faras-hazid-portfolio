@@ -435,9 +435,11 @@ export const syncAllDataToSupabase = async (payload: {
   try {
     const expRows = payload.experiences.map((exp) => ({
       id: exp.id,
+      type: exp.type || 'work',
       period: exp.period,
       role: exp.role,
       company: exp.companyOrOrg,
+      location: exp.location || '',
       description: exp.description || '',
       highlights: exp.highlights || [],
       created_at: new Date().toISOString()
@@ -805,5 +807,83 @@ export const fetchSkillsFromSupabase = async (): Promise<SkillItem[] | null> => 
     console.warn('Supabase fetch skills exception:', err);
   }
   return null;
+};
+
+// ------------------------------------------------------------
+// AUTO-PERSIST (experiences & skills) — dashboard edits reach
+// the public site without a manual "sync" button.
+// ------------------------------------------------------------
+
+export const saveExperiencesToSupabase = async (experiences: ExperienceItem[]): Promise<boolean> => {
+  const supabase = getSupabase();
+  if (!supabase || experiences.length === 0) return false;
+  try {
+    const rows = experiences.map((exp) => ({
+      id: exp.id,
+      type: exp.type || 'work',
+      period: exp.period || '',
+      role: exp.role || '',
+      company: exp.companyOrOrg || '',
+      location: exp.location || '',
+      description: exp.description || '',
+      highlights: exp.highlights || [],
+      created_at: new Date().toISOString(),
+    }));
+    const { error } = await supabase.from('experiences').upsert(rows, { onConflict: 'id' });
+    if (error) {
+      console.warn('saveExperiencesToSupabase error:', error.message);
+      return false;
+    }
+    // Reconcile: remove DB rows that no longer exist locally (deleted in dashboard)
+    const keep = rows.map((r) => r.id);
+    try {
+      const { data: existing } = await supabase.from('experiences').select('id');
+      const stale = (existing || []).map((r: any) => r.id).filter((id: string) => !keep.includes(id));
+      if (stale.length > 0) {
+        await supabase.from('experiences').delete().in('id', stale);
+      }
+    } catch (re) {
+      console.warn('saveExperiencesToSupabase reconcile error:', re);
+    }
+    return true;
+  } catch (err: any) {
+    console.warn('saveExperiencesToSupabase exception:', err);
+    return false;
+  }
+};
+
+export const saveSkillsToSupabase = async (skills: SkillItem[]): Promise<boolean> => {
+  const supabase = getSupabase();
+  if (!supabase || skills.length === 0) return false;
+  try {
+    const rows = skills.map((sk) => ({
+      id: sk.id,
+      name: sk.name || '',
+      category: sk.category || 'Design',
+      level: sk.proficiency ?? 90,
+      icon: sk.icon || 'Figma',
+      color: sk.color || 'amber',
+      created_at: new Date().toISOString(),
+    }));
+    const { error } = await supabase.from('skills').upsert(rows, { onConflict: 'id' });
+    if (error) {
+      console.warn('saveSkillsToSupabase error:', error.message);
+      return false;
+    }
+    try {
+      const keep = rows.map((r) => r.id);
+      const { data: existing } = await supabase.from('skills').select('id');
+      const stale = (existing || []).map((r: any) => r.id).filter((id: string) => !keep.includes(id));
+      if (stale.length > 0) {
+        await supabase.from('skills').delete().in('id', stale);
+      }
+    } catch (reconErr) {
+      console.warn('saveSkillsToSupabase reconcile error:', reconErr);
+    }
+    return true;
+  } catch (err: any) {
+    console.warn('saveSkillsToSupabase exception:', err);
+    return false;
+  }
 };
 

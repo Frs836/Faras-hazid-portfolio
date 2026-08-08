@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { 
   Language, 
   Project, 
@@ -51,6 +51,8 @@ import {
   deleteFaq,
   fetchExperiencesFromSupabase,
   fetchSkillsFromSupabase,
+  saveExperiencesToSupabase,
+  saveSkillsToSupabase,
 } from '../services/apiService';
 
 export type PageView = 'home' | 'about' | 'portfolio' | 'services' | 'contact' | 'secret-admin';
@@ -249,6 +251,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [pageContent, setPageContent] = useState<PageContentRow[]>([]);
 
+  // Guards: skip auto-persist until the DB snapshot has hydrated once,
+  // so a stale localStorage value never overwrites fresher DB data.
+  const loadedExpRef = useRef(false);
+  const loadedSkillsRef = useRef(false);
+
   const [analytics, setAnalytics] = useState<AnalyticsData>(() => {
     const saved = localStorage.getItem('clayfolio_analytics');
     return saved ? JSON.parse(saved) : initialAnalytics;
@@ -310,10 +317,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
     // Experiences & skills propagation (admin edits reach visitors)
     fetchExperiencesFromSupabase().then((list) => {
-      if (list && list.length > 0) setExperiences(list);
+      if (list && list.length > 0) {
+        setExperiences(list);
+        loadedExpRef.current = true;
+      }
     });
     fetchSkillsFromSupabase().then((list) => {
-      if (list && list.length > 0) setSkills(list);
+      if (list && list.length > 0) {
+        setSkills(list);
+        loadedSkillsRef.current = true;
+      }
     });
     // Load editable page content; auto-seed once if DB empty
     fetchPageContent().then((rows) => {
@@ -339,6 +352,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     });
   }, []);
+
+  // Auto-persist experiences & skills to Supabase (debounced) so admin
+  // edits reach the public site without a manual "sync" button.
+  useEffect(() => {
+    if (!loadedExpRef.current) return;
+    const t = setTimeout(() => {
+      saveExperiencesToSupabase(experiences).catch(() => {});
+    }, 800);
+    return () => clearTimeout(t);
+  }, [experiences]);
+
+  useEffect(() => {
+    if (!loadedSkillsRef.current) return;
+    const t = setTimeout(() => {
+      saveSkillsToSupabase(skills).catch(() => {});
+    }, 800);
+    return () => clearTimeout(t);
+  }, [skills]);
 
   useEffect(() => {
     localStorage.setItem('clayfolio_packages', JSON.stringify(packages));

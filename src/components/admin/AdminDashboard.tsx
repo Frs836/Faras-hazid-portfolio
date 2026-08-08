@@ -1090,7 +1090,8 @@ export const AdminDashboard: React.FC = () => {
                     )}
                   </h2>
                   <p className="text-xs text-slate-500 font-medium">
-                    Manage persistent database storage for projects, client contact inquiries, and cost estimates.
+                    Perubahan situs kini otomatis tersimpan ke Supabase (auto-sync) — tanpa klik manual.
+                    Tombol push di bawah hanya untuk menyinkronkan seluruh tabel dari data default.
                   </p>
                 </div>
               </div>
