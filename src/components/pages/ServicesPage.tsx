@@ -6,7 +6,7 @@ import { ProjectEstimator } from '../calculator/ProjectEstimator';
 import { ChevronDown, ChevronUp, MessageCircle, Clock, Star, ArrowUpRight } from 'lucide-react';
 
 export const ServicesPage: React.FC = () => {
-  const { t, services, packages, faqs, language, addToast, getContent } = useApp();
+  const { t, services, packages, faqs, language, addToast, getContent, setCurrentPage } = useApp();
   const [openFaqId, setOpenFaqId] = useState<string | null>(faqs[0]?.id || null);
 
   // DB-first: any field edited in the dashboard wins; the static i18n map
@@ -285,9 +285,7 @@ export const ServicesPage: React.FC = () => {
               </h2>
             </div>
             <button
-              onClick={() => {
-                window.location.hash = '#contact';
-              }}
+              onClick={() => setCurrentPage('contact')}
               className="btn-accent shrink-0"
             >
               Start a project

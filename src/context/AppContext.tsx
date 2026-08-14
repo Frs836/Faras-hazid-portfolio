@@ -60,6 +60,29 @@ import {
 export type PageView = 'home' | 'about' | 'portfolio' | 'services' | 'contact' | 'secret-admin';
 export type ThemeMode = 'light' | 'dark';
 
+// Browser history paths (trailing slash, e.g. /about/) — shared on the
+// public site, direct links, and SEO. SPA fallback is handled server-side
+// (Vercel rewrite to index.html).
+export const PAGE_PATHS: Record<PageView, string> = {
+  home: '/',
+  about: '/about/',
+  portfolio: '/portfolio/',
+  services: '/services/',
+  contact: '/contact/',
+  'secret-admin': '/secret-admin/',
+};
+
+const VALID_PAGES: PageView[] = ['home', 'about', 'portfolio', 'services', 'contact', 'secret-admin'];
+
+const pathToPage = (pathname: string): PageView => {
+  const clean = pathname.replace(/\/+$/, '') || '/';
+  if (clean === '/') return 'home';
+  const hit = (Object.entries(PAGE_PATHS) as [PageView, string][]).find(
+    ([, path]) => path.replace(/\/+$/, '') === clean
+  );
+  return hit?.[0] ?? 'home';
+};
+
 interface AppContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
@@ -153,16 +176,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const toggleTheme = () => setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
 
   const [currentPage, setCurrentPage] = useState<PageView>(() => {
+    // Legacy hash links (e.g. /#secret-admin) → hard-redirect to clean path
     const hash = window.location.hash.replace('#', '') as PageView;
-    const validPages: PageView[] = ['home', 'about', 'portfolio', 'services', 'contact', 'secret-admin'];
-    if (validPages.includes(hash)) {
+    if (VALID_PAGES.includes(hash)) {
+      const target = PAGE_PATHS[hash];
+      window.history.replaceState(null, '', target);
       return hash;
     }
-    const saved = localStorage.getItem('clayfolio_page') as PageView;
-    if (saved && validPages.includes(saved)) {
-      return saved;
-    }
-    return 'home';
+    return pathToPage(window.location.pathname);
   });
 
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -277,21 +298,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     localStorage.setItem('clayfolio_page', currentPage);
-    if (window.location.hash !== `#${currentPage}`) {
-      window.location.hash = `#${currentPage}`;
+    const target = PAGE_PATHS[currentPage];
+    if (window.location.pathname !== target) {
+      window.history.pushState(null, '', target);
     }
   }, [currentPage]);
 
   useEffect(() => {
-    const handleHashChange = () => {
-      const hash = window.location.hash.replace('#', '') as PageView;
-      const validPages: PageView[] = ['home', 'about', 'portfolio', 'services', 'contact', 'secret-admin'];
-      if (validPages.includes(hash)) {
-        setCurrentPage(hash);
-      }
-    };
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    const handlePopState = () => setCurrentPage(pathToPage(window.location.pathname));
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   useEffect(() => {
