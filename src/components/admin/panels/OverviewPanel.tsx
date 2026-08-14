@@ -21,7 +21,7 @@ interface Props {
 const LANGS = ['en', 'id', 'ja', 'ar'] as const;
 
 export const OverviewPanel: React.FC<Props> = ({ onNavigate }) => {
-  const { analytics, messages, estimates, projects, packages, estimatorServices, skills, experiences, siteSettings } = useApp();
+  const { analytics, analyticsLoading, messages, estimates, projects, packages, estimatorServices, skills, experiences, siteSettings } = useApp();
 
   const unread = messages.filter((m) => !m.read);
   const unreadCount = unread.length;
@@ -88,7 +88,13 @@ export const OverviewPanel: React.FC<Props> = ({ onNavigate }) => {
               <s.icon className="w-4.5 h-4.5" />
             </div>
             <div className="flex items-end justify-between">
-              <span className="text-2xl font-black text-ink display-font">{s.value.toLocaleString()}</span>
+              <span className="text-2xl font-black text-ink display-font">
+                {analyticsLoading ? (
+                  <span className="inline-block w-10 h-7 bg-paper2 animate-pulse rounded" />
+                ) : (
+                  s.value.toLocaleString()
+                )}
+              </span>
               {s.prefix && <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded">{s.prefix}</span>}
             </div>
             <div className="flex items-center justify-between mt-0.5">
@@ -113,7 +119,16 @@ export const OverviewPanel: React.FC<Props> = ({ onNavigate }) => {
             </button>
           </div>
           <div className="p-5">
-            {topProjects.length === 0 ? (
+            {analyticsLoading ? (
+              <div className="flex items-end gap-3 h-44">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-2 justify-end">
+                    <div className="w-full bg-paper2 animate-pulse rounded-t-md" style={{ height: `${30 + (i % 3) * 25}%` }} />
+                    <span className="w-3/4 h-2 bg-paper2 animate-pulse rounded" />
+                  </div>
+                ))}
+              </div>
+            ) : topProjects.length === 0 ? (
               <div className="py-10 text-center mono-label text-ink-faint">Belum ada data kunjungan proyek.</div>
             ) : (
               <div className="flex items-end gap-3 h-44">
@@ -158,17 +173,26 @@ export const OverviewPanel: React.FC<Props> = ({ onNavigate }) => {
               <span className="mono-label text-ink-muted text-[10px]">per negara</span>
             </div>
             <div className="mt-3 space-y-2">
-              {countries.slice(0, 3).map((c) => (
-                <div key={c.country}>
-                  <div className="flex justify-between text-[11px] mb-1">
-                    <span className="text-ink truncate">{c.country}</span>
-                    <span className="mono-label text-ink-muted">{c.count.toLocaleString()}</span>
+              {analyticsLoading ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="space-y-1">
+                    <div className="h-2 w-1/3 bg-paper2 animate-pulse rounded" />
+                    <div className="h-1.5 bg-paper2 animate-pulse rounded-full" />
                   </div>
-                  <div className="h-1.5 bg-paper2 rounded-full">
-                    <div className="h-1.5 bg-accent2 rounded-full" style={{ width: `${Math.round((c.count / maxCountry) * 100)}%` }} />
+                ))
+              ) : (
+                countries.slice(0, 3).map((c) => (
+                  <div key={c.country}>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="text-ink truncate">{c.country}</span>
+                      <span className="mono-label text-ink-muted">{c.count.toLocaleString()}</span>
+                    </div>
+                    <div className="h-1.5 bg-paper2 rounded-full">
+                      <div className="h-1.5 bg-accent2 rounded-full" style={{ width: `${Math.round((c.count / maxCountry) * 100)}%` }} />
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>

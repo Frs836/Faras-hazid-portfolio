@@ -25,7 +25,6 @@ import {
   initialExperiences, 
   initialSkills, 
   initialFaqs, 
-  initialAnalytics,
   initialEstimatorServices,
   initialEstimatorScopes,
   initialEstimatorTimelines,
@@ -99,6 +98,17 @@ const pathToPage = (pathname: string): PageView => {
   return hit?.[0] ?? 'notfound';
 };
 
+// Analytics start empty — only DB-recorded events feed the dashboard,
+// so no fabricated numbers ever reach the UI.
+const EMPTY_ANALYTICS: AnalyticsData = {
+  totalVisitors: 0,
+  projectViews: 0,
+  inquiriesSent: 0,
+  cvDownloads: 0,
+  topProjects: [],
+  visitorByCountry: [],
+};
+
 interface AppContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
@@ -154,6 +164,7 @@ interface AppContextType {
   deleteMessage: (id: string) => void;
 
   analytics: AnalyticsData;
+  analyticsLoading: boolean;
 
   toasts: ToastMessage[];
   addToast: (title: string, message: string, type?: ToastMessage['type']) => void;
@@ -299,10 +310,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const loadedSkillsRef = useRef(false);
   const loadedPackagesRef = useRef(false);
 
-  const [analytics, setAnalytics] = useState<AnalyticsData>(() => {
-    const saved = localStorage.getItem('clayfolio_analytics');
-    return saved ? JSON.parse(saved) : initialAnalytics;
-  });
+  const [analytics, setAnalytics] = useState<AnalyticsData>(EMPTY_ANALYTICS);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   // Save changes to LocalStorage
   useEffect(() => {
@@ -466,10 +475,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('clayfolio_messages', JSON.stringify(messages));
   }, [messages]);
 
-  useEffect(() => {
-    localStorage.setItem('clayfolio_analytics', JSON.stringify(analytics));
-  }, [analytics]);
-
   // Handle document direction for Arabic RTL
   useEffect(() => {
     if (language === 'ar') {
@@ -557,20 +562,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Load fresh DB-backed leads + analytics into admin state after unlock.
   const refreshAdminData = async () => {
-    const [msgs, ests, aggr] = await Promise.all([
-      fetchAdminMessages(),
-      fetchAdminEstimates(),
-      fetchAdminAnalytics(),
-    ]);
-    if (msgs.length > 0) setMessages(msgs);
-    if (ests.length > 0) setEstimates(ests);
-    if (aggr) {
-      setAnalytics((prev) => ({
-        ...prev,
-        ...aggr,
-        topProjects: aggr.topProjects ?? prev.topProjects,
-        visitorByCountry: aggr.visitorByCountry ?? prev.visitorByCountry,
-      }));
+    setAnalyticsLoading(true);
+    try {
+      const [msgs, ests, aggr] = await Promise.all([
+        fetchAdminMessages(),
+        fetchAdminEstimates(),
+        fetchAdminAnalytics(),
+      ]);
+      if (msgs.length > 0) setMessages(msgs);
+      if (ests.length > 0) setEstimates(ests);
+      if (aggr) {
+        setAnalytics((prev) => ({
+          ...prev,
+          ...aggr,
+          topProjects: aggr.topProjects ?? prev.topProjects,
+          visitorByCountry: aggr.visitorByCountry ?? prev.visitorByCountry,
+        }));
+      }
+    } finally {
+      setAnalyticsLoading(false);
     }
   };
 
@@ -596,7 +606,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setEstimatorTimelines(initialEstimatorTimelines);
     setSiteSettings(initialSiteSettings);
     setMessages([]);
-    setAnalytics(initialAnalytics);
+    setAnalytics(EMPTY_ANALYTICS);
     localStorage.clear();
     addToast('Database Reset', 'Reset all portfolio data to default state.', 'warning');
   };
@@ -695,7 +705,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addMessage,
         markMessageRead,
         deleteMessage,
-        analytics,
+analytics,
+        analyticsLoading,
         toasts,
         addToast,
         removeToast,
