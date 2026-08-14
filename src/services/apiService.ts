@@ -9,8 +9,154 @@ import {
   SkillItem,
   SiteSettings,
   PageContentRow,
-  DbFaq
+  DbFaq,
+  ContactMessage,
+  EstimateLead,
+  AnalyticsData
 } from '../types';
+
+
+// ------------------------------------------------------------------
+// ADMIN AUTH — HMAC token issued by POST /api/admin/verify (server-side PIN)
+// ------------------------------------------------------------------
+const ADMIN_TOKEN_KEY = 'clayfolio_admin_token';
+
+export const getAdminToken = (): string => {
+  try {
+    return localStorage.getItem(ADMIN_TOKEN_KEY) || '';
+  } catch {
+    return '';
+  }
+};
+
+export const setAdminToken = (token: string) => {
+  try {
+    if (token) localStorage.setItem(ADMIN_TOKEN_KEY, token);
+    else localStorage.removeItem(ADMIN_TOKEN_KEY);
+  } catch { /* ignore */ }
+};
+
+const adminHeaders = (headers: Record<string, string> = {}): Record<string, string> => {
+  const token = getAdminToken();
+  return token ? { ...headers, Authorization: `Bearer ${token}` } : headers;
+};
+
+export const verifyAdminPin = async (pin: string): Promise<{ ok: boolean; error?: string }> => {
+  try {
+    const res = await fetch('/api/admin/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin }),
+    });
+    const json = await res.json();
+    if (res.ok && json.token) {
+      setAdminToken(json.token);
+      return { ok: true };
+    }
+    return { ok: false, error: json.error || 'PIN salah.' };
+  } catch {
+    return { ok: false, error: 'Server tidak dapat dijangkau.' };
+  }
+};
+
+const adminFetch = (path: string, opts: RequestInit = {}): Promise<Response> => {
+  const headers = new Headers(opts.headers || {});
+  headers.set('Content-Type', 'application/json');
+  const token = getAdminToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  return fetch(path, { ...opts, headers });
+};
+
+export const fetchAdminMessages = async (): Promise<ContactMessage[]> => {
+  try {
+    const res = await adminFetch('/api/messages');
+    if (!res.ok) return [];
+    const body = await res.json();
+    return (body.messages || []).map((m: any) => ({
+      id: m.id,
+      name: m.name,
+      email: m.email,
+      serviceInterest: m.project_type || '',
+      budget: m.budget || '',
+      message: m.message,
+      createdAt: m.created_at || new Date().toISOString(),
+      read: m.status === 'read',
+    }));
+  } catch {
+    return [];
+  }
+};
+
+export const markAdminMessageRead = async (id: string): Promise<boolean> => {
+  try {
+    const res = await adminFetch(`/api/messages/${id}/read`, { method: 'PATCH' });
+    return res.ok;
+  } catch {
+    return false;
+  }
+};
+
+export const deleteAdminMessage = async (id: string): Promise<boolean> => {
+  try {
+    const res = await adminFetch(`/api/messages/${id}`, { method: 'DELETE' });
+    return res.ok;
+  } catch {
+    return false;
+  }
+};
+
+export const fetchAdminEstimates = async (): Promise<EstimateLead[]> => {
+  try {
+    const res = await adminFetch('/api/estimates');
+    if (!res.ok) return [];
+    const body = await res.json();
+    return (body.estimates || []).map((e: any) => ({
+      id: e.id,
+      clientName: e.client_name,
+      clientEmail: e.client_email,
+      clientPhone: e.client_phone,
+      serviceType: e.service_type,
+      deliverables: e.deliverables || [],
+      urgency: e.urgency,
+      estimatedPrice: e.estimated_price,
+      notes: e.notes,
+      status: e.status,
+      createdAt: e.created_at,
+    }));
+  } catch {
+    return [];
+  }
+};
+
+export const fetchAdminAnalytics = async (): Promise<Partial<AnalyticsData> | null> => {
+  try {
+    const res = await adminFetch('/api/analytics');
+    if (!res.ok) return null;
+    const json = await res.json();
+    return {
+      totalVisitors: json.counts?.page_visit ?? 0,
+      projectViews: json.counts?.project_view ?? 0,
+      inquiriesSent: json.counts?.inquiry ?? 0,
+      cvDownloads: json.counts?.cv_download ?? 0,
+      topProjects: json.topProjects || [],
+      visitorByCountry: json.countries || [],
+    };
+  } catch {
+    return null;
+  }
+};
+
+// Public event tracking — fire-and-forget, never blocks UI.
+export const trackEvent = (type: 'page_visit' | 'project_view' | 'cv_download' | 'inquiry', page?: string, label?: string) => {
+  try {
+    fetch('/api/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, page: page || null, label: label || null }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch { /* ignore */ }
+};
 
 
 export interface ContactFormData {
@@ -277,7 +423,7 @@ export const saveProjectToSupabase = async (project: Project): Promise<boolean> 
   try {
     const res = await fetch('/api/projects', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: adminHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(project),
     });
     if (res.ok) {
@@ -305,7 +451,7 @@ export const deleteProjectFromSupabase = async (id: string): Promise<boolean> =>
   }
 
   try {
-    const res = await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+    const res = await fetch(`/api/projects/${id}`, { method: 'DELETE', headers: adminHeaders() });
     if (res.ok) deleted = true;
   } catch (err) {
     console.warn('Backend API delete project error:', err);
@@ -712,7 +858,7 @@ export const savePageContent = async (rows: PageContentRow[]): Promise<boolean> 
   try {
     const res = await fetch('/api/content', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: adminHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ rows }),
     });
     return res.ok;
@@ -726,7 +872,7 @@ export const seedPageContent = async (rows: PageContentRow[]): Promise<boolean> 
   try {
     const res = await fetch('/api/content/seed', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: adminHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ rows }),
     });
     return res.ok;

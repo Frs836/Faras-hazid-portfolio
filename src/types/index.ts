@@ -115,6 +115,20 @@ export interface ContactMessage {
   read: boolean;
 }
 
+export interface EstimateLead {
+  id: string;
+  clientName: string;
+  clientEmail: string;
+  clientPhone?: string;
+  serviceType: string;
+  deliverables: string[];
+  urgency: string;
+  estimatedPrice: number;
+  notes?: string;
+  status: string;
+  createdAt: string;
+}
+
 export interface AnalyticsData {
   totalVisitors: number;
   projectViews: number;

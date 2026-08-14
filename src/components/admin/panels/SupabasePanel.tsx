@@ -65,7 +65,7 @@ export const SupabasePanel: React.FC = () => {
     }
   };
 
-  const tables = ['projects', 'packages', 'estimator_services', 'estimator_scopes', 'estimator_timelines', 'experiences', 'skills', 'messages & estimates'];
+  const tables = ['projects', 'packages', 'estimator_services', 'estimator_scopes', 'estimator_timelines', 'experiences', 'skills', 'messages', 'estimates', 'analytics_events', 'page_content & faqs'];
 
   return (
     <div className="space-y-6">
@@ -113,8 +113,12 @@ export const SupabasePanel: React.FC = () => {
             <ul className="space-y-1 text-slate-700 font-mono text-[11px]">
               <li><span className="text-blue-600 font-bold">SUPABASE_URL</span> = https://your-project.supabase.co</li>
               <li><span className="text-blue-600 font-bold">SUPABASE_ANON_KEY</span> = eyJhbGciOi...</li>
+              <li><span className="text-blue-600 font-bold">SUPABASE_SERVICE_ROLE_KEY</span> = server-only</li>
               <li><span className="text-blue-600 font-bold">VITE_SUPABASE_URL</span> = https://your-project.supabase.co</li>
               <li><span className="text-blue-600 font-bold">VITE_SUPABASE_ANON_KEY</span> = eyJhbGciOi...</li>
+              <li><span className="text-blue-600 font-bold">GEMINI_API_KEY</span> = auto-translate</li>
+              <li><span className="text-emerald-600 font-bold">ADMIN_PIN</span> = server-only (PIN admin)</li>
+              <li><span className="text-emerald-600 font-bold">ADMIN_SECRET</span> = server-only (HMAC token signing)</li>
             </ul>
           </div>
 
@@ -137,7 +141,7 @@ export const SupabasePanel: React.FC = () => {
               <Terminal className="w-4 h-4 text-slate-700" />
               <span>PostgreSQL DDL Migration Script (Paste into Supabase SQL Editor)</span>
             </span>
-            <span className="text-[10px] font-bold text-slate-500">Row Level Security (RLS) Enabled</span>
+            <span className="text-[10px] font-bold text-slate-500">RLS aktif · messages/estimates/events = insert-only (anon)</span>
           </div>
           <div className="relative rounded-2xl bg-slate-900 text-emerald-400 p-4 font-mono text-[11px] overflow-x-auto max-h-72 border border-slate-800 leading-relaxed">
             <pre>{SUPABASE_SQL_SCHEMA}</pre>

@@ -8,6 +8,7 @@ import {
   SkillItem, 
   FaqItem, 
   ContactMessage, 
+  EstimateLead,
   AnalyticsData, 
   ToastMessage,
   EstimatorServiceOption,
@@ -55,24 +56,39 @@ import {
   saveSkillsToSupabase,
   savePackagesToSupabase,
   fetchPackagesFromSupabase,
+  verifyAdminPin,
+  fetchAdminMessages,
+  fetchAdminEstimates,
+  fetchAdminAnalytics,
+  markAdminMessageRead,
+  deleteAdminMessage,
+  trackEvent,
 } from '../services/apiService';
 
-export type PageView = 'home' | 'about' | 'portfolio' | 'services' | 'contact' | 'secret-admin';
+export type PageView = 'home' | 'about' | 'portfolio' | 'services' | 'contact' | 'notfound';
 export type ThemeMode = 'light' | 'dark';
 
 // Browser history paths (trailing slash, e.g. /about/) — shared on the
 // public site, direct links, and SEO. SPA fallback is handled server-side
-// (Vercel rewrite to index.html).
+// (Vercel rewrite to index.html). Any other path renders the fake-404 trap.
 export const PAGE_PATHS: Record<PageView, string> = {
   home: '/',
   about: '/about/',
   portfolio: '/portfolio/',
   services: '/services/',
   contact: '/contact/',
-  'secret-admin': '/secret-admin/',
+  notfound: '/null/',
 };
 
-const VALID_PAGES: PageView[] = ['home', 'about', 'portfolio', 'services', 'contact', 'secret-admin'];
+// Legacy hash links (e.g. /#secret-admin) → clean path they resolve to.
+const HASH_REDIRECT: Record<string, string> = {
+  home: '/',
+  about: '/about/',
+  portfolio: '/portfolio/',
+  services: '/services/',
+  contact: '/contact/',
+  'secret-admin': '/null/',
+};
 
 const pathToPage = (pathname: string): PageView => {
   const clean = pathname.replace(/\/+$/, '') || '/';
@@ -80,7 +96,7 @@ const pathToPage = (pathname: string): PageView => {
   const hit = (Object.entries(PAGE_PATHS) as [PageView, string][]).find(
     ([, path]) => path.replace(/\/+$/, '') === clean
   );
-  return hit?.[0] ?? 'home';
+  return hit?.[0] ?? 'notfound';
 };
 
 interface AppContextType {
@@ -125,6 +141,7 @@ interface AppContextType {
   setSiteSettings: React.Dispatch<React.SetStateAction<SiteSettings>>;
 
   messages: ContactMessage[];
+  estimates: EstimateLead[];
 
   pageContent: PageContentRow[];
   getContent: (page: string, field: string, fallback?: string) => string;
@@ -153,7 +170,8 @@ interface AppContextType {
   isAdminUnlocked: boolean;
   setIsAdminUnlocked: (unlocked: boolean) => void;
   adminPasscode: string;
-  verifyAdminPasscode: (pass: string) => boolean;
+  verifyAdminPasscode: (pass: string) => Promise<boolean>;
+  refreshAdminData: () => Promise<void>;
 
   resetToDefaults: () => void;
 }
@@ -177,11 +195,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [currentPage, setCurrentPage] = useState<PageView>(() => {
     // Legacy hash links (e.g. /#secret-admin) → hard-redirect to clean path
-    const hash = window.location.hash.replace('#', '') as PageView;
-    if (VALID_PAGES.includes(hash)) {
-      const target = PAGE_PATHS[hash];
-      window.history.replaceState(null, '', target);
-      return hash;
+    const hash = window.location.hash.replace('#', '');
+    if (HASH_REDIRECT[hash]) {
+      window.history.replaceState(null, '', HASH_REDIRECT[hash]);
+      return hash === 'secret-admin' ? 'notfound' : (hash as PageView);
     }
     return pathToPage(window.location.pathname);
   });
@@ -272,6 +289,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [estimates, setEstimates] = useState<EstimateLead[]>([]);
+
   const [pageContent, setPageContent] = useState<PageContentRow[]>([]);
 
   // Guards: skip auto-persist until the DB snapshot has hydrated once,
@@ -299,9 +318,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem('clayfolio_page', currentPage);
     const target = PAGE_PATHS[currentPage];
-    if (window.location.pathname !== target) {
+    if (currentPage !== 'notfound' && target && window.location.pathname !== target) {
       window.history.pushState(null, '', target);
     }
+    trackEvent('page_visit', target || currentPage);
   }, [currentPage]);
 
   useEffect(() => {
@@ -505,16 +525,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...prev,
       inquiriesSent: prev.inquiriesSent + 1,
     }));
+    trackEvent('inquiry');
   };
 
   const markMessageRead = (id: string) => {
     setMessages((prev) =>
       prev.map((m) => (m.id === id ? { ...m, read: true } : m))
     );
+    markAdminMessageRead(id);
   };
 
   const deleteMessage = (id: string) => {
     setMessages((prev) => prev.filter((m) => m.id !== id));
+    deleteAdminMessage(id);
   };
 
   const openCvModal = (lang: 'en' | 'id') => {
@@ -524,11 +547,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...prev,
       cvDownloads: prev.cvDownloads + 1,
     }));
+    trackEvent('cv_download');
   };
 
-  const verifyAdminPasscode = (pass: string) => {
-    if (pass === ADMIN_PIN || pass === 'clay-admin-2026') {
+  // Track a case-study view whenever a project detail opens.
+  useEffect(() => {
+    if (selectedProject) trackEvent('project_view', undefined, selectedProject.title);
+  }, [selectedProject]);
+
+  // Load fresh DB-backed leads + analytics into admin state after unlock.
+  const refreshAdminData = async () => {
+    const [msgs, ests, aggr] = await Promise.all([
+      fetchAdminMessages(),
+      fetchAdminEstimates(),
+      fetchAdminAnalytics(),
+    ]);
+    if (msgs.length > 0) setMessages(msgs);
+    if (ests.length > 0) setEstimates(ests);
+    if (aggr) {
+      setAnalytics((prev) => ({
+        ...prev,
+        ...aggr,
+        topProjects: aggr.topProjects ?? prev.topProjects,
+        visitorByCountry: aggr.visitorByCountry ?? prev.visitorByCountry,
+      }));
+    }
+  };
+
+  const verifyAdminPasscode = async (pass: string): Promise<boolean> => {
+    const { ok } = await verifyAdminPin(pass);
+    if (ok) {
       setIsAdminUnlocked(true);
+      await refreshAdminData();
       return true;
     }
     return false;
@@ -635,6 +685,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         siteSettings,
         setSiteSettings,
         messages,
+        estimates,
         pageContent,
         getContent,
         getContentList,
@@ -658,6 +709,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsAdminUnlocked,
         adminPasscode: ADMIN_PIN,
         verifyAdminPasscode,
+        refreshAdminData,
         resetToDefaults,
       }}
     >

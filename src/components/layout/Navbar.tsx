@@ -41,7 +41,7 @@ export const Navbar: React.FC = () => {
     clickTimer.current = setTimeout(() => setClickCount(0), 500);
     if (next >= 3) {
       setClickCount(0);
-      handlePageSelect('secret-admin');
+      handlePageSelect('notfound');
     }
   };
 
@@ -87,7 +87,7 @@ export const Navbar: React.FC = () => {
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               {isAdminUnlocked && (
                 <button
-                  onClick={() => handlePageSelect('secret-admin')}
+                  onClick={() => handlePageSelect('notfound')}
                   className="hidden sm:flex items-center gap-1.5 mono-label px-2.5 py-1.5 rounded-lg bg-accent text-accent-ink hover:brightness-105 transition"
                 >
                   <ShieldCheck className="w-3.5 h-3.5" />
@@ -166,7 +166,7 @@ export const Navbar: React.FC = () => {
 
               {isAdminUnlocked && (
                 <button
-                  onClick={() => handlePageSelect('secret-admin')}
+                  onClick={() => handlePageSelect('notfound')}
                   className="w-full flex items-center justify-center gap-2 py-3 rounded-md bg-accent text-accent-ink mono-label"
                 >
                   <ShieldCheck className="w-4 h-4" />

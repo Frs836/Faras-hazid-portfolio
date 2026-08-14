@@ -21,7 +21,7 @@ interface Props {
 const LANGS = ['en', 'id', 'ja', 'ar'] as const;
 
 export const OverviewPanel: React.FC<Props> = ({ onNavigate }) => {
-  const { analytics, messages, projects, packages, estimatorServices, skills, experiences, siteSettings } = useApp();
+  const { analytics, messages, estimates, projects, packages, estimatorServices, skills, experiences, siteSettings } = useApp();
 
   const unread = messages.filter((m) => !m.read);
   const unreadCount = unread.length;
@@ -31,7 +31,7 @@ export const OverviewPanel: React.FC<Props> = ({ onNavigate }) => {
 
   const stats: { label: string; value: number; icon: LucideIcon; prefix?: string; color: string; bg: string; onClick?: () => void }[] = [
     { label: 'Total Proyek', value: projects.length, icon: FolderOpen, color: 'text-blue-600', bg: 'bg-blue-50', onClick: () => onNavigate('portfolio', 'projects') },
-    { label: 'Leads Masuk', value: messages.length, icon: MessageSquare, prefix: unreadCount ? `+${unreadCount} baru` : '', color: 'text-rose-600', bg: 'bg-rose-50', onClick: () => onNavigate('leads') },
+    { label: 'Leads Masuk', value: messages.length + estimates.length, icon: MessageSquare, prefix: unreadCount ? `+${unreadCount}` : '', color: 'text-rose-600', bg: 'bg-rose-50', onClick: () => onNavigate('leads') },
     { label: 'Project Views', value: analytics.projectViews, icon: Eye, color: 'text-violet-600', bg: 'bg-violet-50', onClick: () => onNavigate('analytics') },
     { label: 'CV Downloads', value: analytics.cvDownloads, icon: FileDown, color: 'text-emerald-600', bg: 'bg-emerald-50', onClick: () => onNavigate('analytics') },
   ];

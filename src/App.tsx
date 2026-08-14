@@ -11,10 +11,11 @@ import { AboutPage } from './components/pages/AboutPage';
 import { PortfolioPage } from './components/pages/PortfolioPage';
 import { ServicesPage } from './components/pages/ServicesPage';
 import { ContactPage } from './components/pages/ContactPage';
-import { SecretAdminGate } from './components/admin/SecretAdminGate';
+import { NotFoundPage } from './components/pages/NotFoundPage';
+import { AdminDashboard } from './components/admin/AdminDashboard';
 
 const MainLayout: React.FC = () => {
-  const { currentPage } = useApp();
+  const { currentPage, isAdminUnlocked } = useApp();
 
   const renderPage = () => {
     switch (currentPage) {
@@ -28,8 +29,8 @@ const MainLayout: React.FC = () => {
         return <ServicesPage />;
       case 'contact':
         return <ContactPage />;
-      case 'secret-admin':
-        return <SecretAdminGate />;
+      case 'notfound':
+        return <NotFoundPage />;
       default:
         return <HomePage />;
     }
@@ -65,6 +66,13 @@ const MainLayout: React.FC = () => {
       <div className="relative z-10">
         <Footer />
       </div>
+
+      {/* Admin dashboard — full-screen overlay, only after server-verified PIN */}
+      {isAdminUnlocked && (
+        <div className="fixed inset-0 z-[60] overflow-y-auto bg-paper">
+          <AdminDashboard />
+        </div>
+      )}
     </div>
   );
 };

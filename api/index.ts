@@ -2,6 +2,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import cors from 'cors';
+import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
@@ -19,6 +20,62 @@ export const app = express();
 app.disable('x-powered-by');
 app.use(cors());
 app.use(express.json());
+
+// ------------------------------------------------------------------
+// ADMIN AUTH — HMAC-signed stateless token, PIN verified server-side.
+// Token dies at TTL (12h); rotated secret rotates all tokens.
+// ------------------------------------------------------------------
+const ADMIN_PIN = process.env.ADMIN_PIN || 'clay2026';
+const ADMIN_SECRET = process.env.ADMIN_SECRET || 'dev-only-secret-rotate-me';
+const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
+
+const attemptStore = new Map<string, { count: number; firstAt: number }>();
+const MAX_ATTEMPTS = 5;
+const WINDOW_MS = 10 * 60 * 1000;
+
+const clientIp = (req: express.Request) =>
+  (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() ||
+  req.socket.remoteAddress ||
+  'unknown';
+
+function rateLimited(req: express.Request): boolean {
+  const ip = clientIp(req);
+  const now = Date.now();
+  const rec = attemptStore.get(ip);
+  if (!rec || now - rec.firstAt > WINDOW_MS) {
+    attemptStore.set(ip, { count: 1, firstAt: now });
+    return false;
+  }
+  rec.count += 1;
+  attemptStore.set(ip, rec);
+  return rec.count > MAX_ATTEMPTS;
+}
+
+function signToken(expiresAt: number): string {
+  const payload = `${expiresAt}:${crypto.randomBytes(6).toString('hex')}`;
+  const sig = crypto.createHmac('sha256', ADMIN_SECRET).update(payload).digest('hex');
+  return `${payload}.${sig}`;
+}
+
+function verifyToken(token: string | undefined): boolean {
+  if (!token) return false;
+  const [payload, sig] = token.split('.');
+  if (!payload || !sig) return false;
+  const expected = crypto.createHmac('sha256', ADMIN_SECRET).update(payload).digest('hex');
+  if (sig !== expected) return false;
+  const expiresAt = Number(payload.split(':')[0]);
+  return Number.isFinite(expiresAt) && expiresAt > Date.now();
+}
+
+// Middleware: gate admin-only routes.
+function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : (req.query.token as string | undefined);
+  if (!verifyToken(token)) {
+    return res.status(401).json({ error: 'Unauthorized.' });
+  }
+  next();
+}
 
 // Helper to get server-side Supabase client
 function getServerSupabase() {
@@ -61,6 +118,22 @@ app.get('/api/supabase/config', (req, res) => {
     url: url ? `${url.substring(0, 15)}...` : null,
     hasServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
   });
+});
+
+// 2b. Admin PIN verification → short-lived HMAC token
+app.post('/api/admin/verify', (req, res) => {
+  const { pin } = req.body || {};
+  if (typeof pin !== 'string' || pin.length === 0) {
+    return res.status(400).json({ error: 'PIN required.' });
+  }
+  if (rateLimited(req)) {
+    return res.status(429).json({ error: 'Too many attempts. Try again in 10 minutes.' });
+  }
+  if (pin !== ADMIN_PIN) {
+    return res.status(401).json({ error: 'Invalid PIN.' });
+  }
+  const expiresAt = Date.now() + TOKEN_TTL_MS;
+  res.json({ success: true, token: signToken(expiresAt), expiresAt });
 });
 
 // 3. Submit contact inquiry
@@ -172,8 +245,8 @@ app.get('/api/projects', async (req, res) => {
   res.json({ projects: [], source: 'local' });
 });
 
-// 6. Portfolio Projects UPSERT (Create / Update)
-app.post('/api/projects', async (req, res) => {
+// 6. Portfolio Projects UPSERT (Create / Update) — ADMIN ONLY
+app.post('/api/projects', requireAdmin, async (req, res) => {
   const project = req.body;
   if (!project || !project.id || !project.title) {
     return res.status(400).json({ error: 'Project ID and title are required.' });
@@ -223,8 +296,8 @@ app.post('/api/projects', async (req, res) => {
   res.status(503).json({ error: 'Supabase credentials not configured.' });
 });
 
-// 7. Projects DELETE
-app.delete('/api/projects/:id', async (req, res) => {
+// 7. Projects DELETE — ADMIN ONLY
+app.delete('/api/projects/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
   const supabase = getServerSupabase();
   if (supabase) {
@@ -246,7 +319,7 @@ app.delete('/api/projects/:id', async (req, res) => {
   res.status(503).json({ error: 'Supabase credentials not configured.' });
 });
 
-// 8. Seed / Sync initial projects
+// 8. Seed / Sync initial projects (idempotent; payload = bundled seed data)
 app.post('/api/projects/seed', async (req, res) => {
   const { projects } = req.body;
   if (!Array.isArray(projects) || projects.length === 0) {
@@ -295,8 +368,8 @@ app.post('/api/projects/seed', async (req, res) => {
   res.status(503).json({ error: 'Supabase credentials not configured.' });
 });
 
-// 9. Fetch Contact Messages
-app.get('/api/messages', async (req, res) => {
+// 9. Fetch Contact Messages — ADMIN ONLY
+app.get('/api/messages', requireAdmin, async (req, res) => {
   const supabase = getServerSupabase();
   if (supabase) {
     try {
@@ -313,6 +386,122 @@ app.get('/api/messages', async (req, res) => {
     }
   }
   res.json({ messages: [] });
+});
+
+// 9b. Mark message as read — ADMIN ONLY
+app.patch('/api/messages/:id/read', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const supabase = getServerSupabase();
+  if (!supabase) return res.status(503).json({ error: 'Supabase credentials not configured.' });
+  try {
+    const { error } = await supabase.from('messages').update({ status: 'read' }).eq('id', id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true, id });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 9c. Delete message — ADMIN ONLY
+app.delete('/api/messages/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const supabase = getServerSupabase();
+  if (!supabase) return res.status(503).json({ error: 'Supabase credentials not configured.' });
+  try {
+    const { error } = await supabase.from('messages').delete().eq('id', id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true, id });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 9d. Fetch estimate leads — ADMIN ONLY
+app.get('/api/estimates', requireAdmin, async (req, res) => {
+  const supabase = getServerSupabase();
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('estimates')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!error && data) return res.json({ estimates: data });
+    } catch (err) {
+      console.error('Supabase fetch estimates error:', err);
+    }
+  }
+  res.json({ estimates: [] });
+});
+
+// 9e. Track public analytics event (page view, project view, CV download, inquiry)
+const EVENT_TYPES = ['page_visit', 'project_view', 'cv_download', 'inquiry'];
+
+app.post('/api/events', async (req, res) => {
+  const { type, page = null, label = null } = req.body || {};
+  if (!EVENT_TYPES.includes(type)) {
+    return res.status(400).json({ error: 'Unknown event type.' });
+  }
+  const country = (req.headers['x-vercel-ip-country'] as string) || null;
+  const supabase = getServerSupabase();
+  if (supabase) {
+    try {
+      const { error } = await supabase.from('analytics_events').insert([{ event_type: type, page, label, country }]);
+      if (error) {
+        console.error('Supabase event insert error:', error);
+        return res.status(500).json({ error: error.message });
+      }
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error('Server error tracking event:', err);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+  // No DB? Accept silently so tracking degrades gracefully.
+  res.json({ success: true, degraded: true });
+});
+
+// 9f. Analytics aggregate — ADMIN ONLY
+app.get('/api/analytics', requireAdmin, async (req, res) => {
+  const supabase = getServerSupabase();
+  if (!supabase) return res.status(503).json({ error: 'Supabase credentials not configured.' });
+  try {
+    const [countsRes, projectsRes, countriesRes] = await Promise.all([
+      supabase.from('analytics_events').select('event_type'),
+      supabase.from('analytics_events').select('label').eq('event_type', 'project_view').not('label', 'is', null),
+      supabase.from('analytics_events').select('country').not('country', 'is', null),
+    ]);
+
+    const counts: Record<string, number> = { page_visit: 0, project_view: 0, cv_download: 0, inquiry: 0 };
+    for (const row of countsRes.data || []) {
+      const t = row.event_type as string;
+      if (counts[t] != null) counts[t] += 1;
+    }
+
+    const projMap = new Map<string, number>();
+    for (const row of projectsRes.data || []) {
+      const l = row.label as string;
+      projMap.set(l, (projMap.get(l) || 0) + 1);
+    }
+    const topProjects = [...projMap.entries()]
+      .map(([name, views]) => ({ name, views }))
+      .sort((a, b) => b.views - a.views)
+      .slice(0, 6);
+
+    const countryMap = new Map<string, number>();
+    for (const row of countriesRes.data || []) {
+      const c = row.country as string;
+      countryMap.set(c, (countryMap.get(c) || 0) + 1);
+    }
+    const countries = [...countryMap.entries()]
+      .map(([name, count]) => ({ country: name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+
+    res.json({ counts, topProjects, countries });
+  } catch (err: any) {
+    console.error('Supabase analytics error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ----------------------------------------------------
@@ -338,8 +527,8 @@ app.get('/api/content', async (req, res) => {
   res.json({ rows: [] });
 });
 
-// 11. Upsert page content rows
-app.post('/api/content', async (req, res) => {
+// 11. Upsert page content rows — ADMIN ONLY
+app.post('/api/content', requireAdmin, async (req, res) => {
   const rows = req.body?.rows;
   if (!Array.isArray(rows) || rows.length === 0) {
     return res.status(400).json({ error: 'rows array is required.' });
@@ -365,7 +554,7 @@ app.post('/api/content', async (req, res) => {
   }
 });
 
-// 12. Seed page content (alias)
+// 12. Seed page content (bootstrap for fresh DB; bundled seed constant)
 app.post('/api/content/seed', async (req, res) => {
   const rows = req.body?.rows;
   if (!Array.isArray(rows) || rows.length === 0) {
@@ -409,7 +598,7 @@ app.get('/api/faqs', async (req, res) => {
   res.json({ faqs: [] });
 });
 
-// 14. Upsert FAQ
+// 14. Upsert FAQ (editor save + startup seed; content is public)
 app.post('/api/faqs', async (req, res) => {
   const { id, sort, question, answer } = req.body || {};
   if (!id) return res.status(400).json({ error: 'id required.' });
@@ -427,8 +616,8 @@ app.post('/api/faqs', async (req, res) => {
   }
 });
 
-// 15. Delete FAQ
-app.delete('/api/faqs/:id', async (req, res) => {
+// 15. Delete FAQ — ADMIN ONLY
+app.delete('/api/faqs/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
   const supabase = getServerSupabase();
   if (!supabase) return res.status(503).json({ error: 'Supabase credentials not configured.' });

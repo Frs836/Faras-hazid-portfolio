@@ -56,6 +56,7 @@ DROP TABLE IF EXISTS public.experiences CASCADE;
 DROP TABLE IF EXISTS public.skills CASCADE;
 DROP TABLE IF EXISTS public.messages CASCADE;
 DROP TABLE IF EXISTS public.estimates CASCADE;
+DROP TABLE IF EXISTS public.analytics_events CASCADE;
 
 -- 1. Site Settings & Profile Info
 CREATE TABLE public.site_settings (
@@ -187,6 +188,17 @@ CREATE TABLE public.estimates (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 11. Anonymous Analytics Events (privacy-safe: no IP/user-agent stored)
+CREATE TABLE public.analytics_events (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  event_type TEXT NOT NULL,                 -- page_visit | project_view | cv_download | inquiry
+  page TEXT,                                -- visited path, e.g. /about/
+  label TEXT,                               -- e.g. project title for project_view
+  country TEXT,                             -- ISO country from CDN edge (if available)
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_analytics_events_type ON public.analytics_events (event_type, created_at DESC);
+
 -- ENABLE ROW LEVEL SECURITY (RLS)
 ALTER TABLE public.site_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
@@ -198,6 +210,7 @@ ALTER TABLE public.experiences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.skills ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.estimates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.analytics_events ENABLE ROW LEVEL SECURITY;
 
 -- CREATE FULL PERMISSIVE POLICIES FOR PORTFOLIO CMS MANAGEMENT
 CREATE POLICY "Public All site_settings" ON public.site_settings FOR ALL USING (true) WITH CHECK (true);
@@ -208,7 +221,11 @@ CREATE POLICY "Public All estimator_scopes" ON public.estimator_scopes FOR ALL U
 CREATE POLICY "Public All estimator_timelines" ON public.estimator_timelines FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public All experiences" ON public.experiences FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public All skills" ON public.skills FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public All messages" ON public.messages FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public All estimates" ON public.estimates FOR ALL USING (true) WITH CHECK (true);
+
+-- SENSITIVE TABLES: anon can INSERT (contact/estimate/event), NEVER SELECT/UPDATE/DELETE.
+-- Admin reads these via the Express API (service role + HMAC admin token).
+CREATE POLICY "anon insert messages" ON public.messages FOR INSERT TO anon WITH CHECK (true);
+CREATE POLICY "anon insert estimates" ON public.estimates FOR INSERT TO anon WITH CHECK (true);
+CREATE POLICY "anon insert analytics_events" ON public.analytics_events FOR INSERT TO anon WITH CHECK (true);
 `;
 
