@@ -909,7 +909,10 @@ const cap = (s: string, n = 350) => (s.length > n ? s.slice(0, n) + '…' : s);
 
 export function registerBotRoutes(app: express.Express, deps: Deps) {
   const { getServerSupabase, requireAdmin, log } = deps;
-  const WEBHOOK_SECRET = () => process.env.BOT_WEBHOOK_SECRET || '';
+  // Telegram secret_token only allows [A-Za-z0-9_-]. Derive a hex-safe value
+  // from whatever is in env so base64/legacy values work unchanged.
+  const WEBHOOK_SECRET = () =>
+    crypto.createHash('sha256').update(process.env.BOT_WEBHOOK_SECRET || '').digest('hex');
 
   const canUse = (chatId: number | undefined) =>
     !!chatId && ALLOWED().includes(String(chatId));
