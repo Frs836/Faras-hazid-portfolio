@@ -56,3 +56,33 @@ reaches into this same infrastructure.
   queue. Documented here; build AFTER portfolio is fully shipped.
 
 Milestone: reuse `TELEGRAM_BOT_TOKEN` already wired for lead notifications.
+
+---
+
+## Operations — runbook
+
+**Admin login (production)**
+- `https://faras-hazid-portfolio.vercel.app/null/` (or any unknown path) → fake 404
+- Click the ghost icon 3× → PIN modal → dashboard opens as overlay.
+- Logo (navbar) 3× also jumps to `/null/`.
+
+**Rotate admin PIN**
+- In-app: Dashboard → Pengaturan → Keamanan Akun → PIN lama + baru.
+- Store = scrypt hash in `admin_config` (Supabase). Env `ADMIN_PIN` is only a
+  first-run fallback until the first successful login migrates it into the DB.
+
+**Lead alerts (Telegram)**
+- Requirement: Vercel env `TELEGRAM_BOT_TOKEN` + `TELEGRAM_ADMIN_CHAT_ID`.
+- Bot: `@farluxbot`. Chat ID: `8358949008`. Messaging a new bot once before wiring.
+- New contact/estimate leads → instant alert to that chat; silently skipped if env unset.
+
+**Environment variables (Vercel → Project Settings → Environment Variables)**
+- `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (client)
+- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (server)
+- `ADMIN_SECRET` (server; must be a long random string — revokes all tokens on rotate)
+- `GEMINI_API_KEY` (server)
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_CHAT_ID` (server)
+
+**Apply schema changes**
+- Full reset script: `SUPABASE_SQL_SCHEMA` (src/lib/supabase.ts) — destructive, DROPs tables.
+- Prefer incremental migrations via Supabase SQL Editor for live data.
