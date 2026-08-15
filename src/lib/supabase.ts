@@ -57,6 +57,7 @@ DROP TABLE IF EXISTS public.skills CASCADE;
 DROP TABLE IF EXISTS public.messages CASCADE;
 DROP TABLE IF EXISTS public.estimates CASCADE;
 DROP TABLE IF EXISTS public.analytics_events CASCADE;
+DROP TABLE IF EXISTS public.admin_config CASCADE;
 
 -- 1. Site Settings & Profile Info
 CREATE TABLE public.site_settings (
@@ -199,6 +200,14 @@ CREATE TABLE public.analytics_events (
 );
 CREATE INDEX IF NOT EXISTS idx_analytics_events_type ON public.analytics_events (event_type, created_at DESC);
 
+-- 12. Admin auth config — scrypt-hashed PIN (server writes via service role only)
+CREATE TABLE public.admin_config (
+  id TEXT PRIMARY KEY DEFAULT 'admin',
+  pin_salt TEXT NOT NULL,
+  pin_hash TEXT NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ENABLE ROW LEVEL SECURITY (RLS)
 ALTER TABLE public.site_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
@@ -211,6 +220,7 @@ ALTER TABLE public.skills ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.estimates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.analytics_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admin_config ENABLE ROW LEVEL SECURITY;
 
 -- CREATE FULL PERMISSIVE POLICIES FOR PORTFOLIO CMS MANAGEMENT
 CREATE POLICY "Public All site_settings" ON public.site_settings FOR ALL USING (true) WITH CHECK (true);

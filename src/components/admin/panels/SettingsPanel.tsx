@@ -1,10 +1,40 @@
 import React from 'react';
 import { useApp } from '../../../context/AppContext';
-import { saveSiteSettingsToSupabase } from '../../../services/apiService';
-import { Save, Settings, User, Phone, UploadCloud } from 'lucide-react';
+import { saveSiteSettingsToSupabase, changeAdminPin } from '../../../services/apiService';
+import { Save, Settings, User, Phone, UploadCloud, ShieldCheck, KeyRound } from 'lucide-react';
 
 export const SettingsPanel: React.FC = () => {
   const { siteSettings, setSiteSettings, addToast } = useApp();
+
+  const [currentPin, setCurrentPin] = React.useState('');
+  const [newPin, setNewPin] = React.useState('');
+  const [confirmPin, setConfirmPin] = React.useState('');
+  const [pinBusy, setPinBusy] = React.useState(false);
+  const [pinError, setPinError] = React.useState('');
+
+  const changePin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPin.trim().length < 6) {
+      setPinError('PIN baru minimal 6 karakter.');
+      return;
+    }
+    if (newPin !== confirmPin) {
+      setPinError('Konfirmasi PIN tidak cocok.');
+      return;
+    }
+    setPinBusy(true);
+    setPinError('');
+    const r = await changeAdminPin(currentPin, newPin);
+    setPinBusy(false);
+    if (r.ok) {
+      addToast('PIN Diperbarui', 'PIN admin baru aktif sekarang.', 'success');
+      setCurrentPin('');
+      setNewPin('');
+      setConfirmPin('');
+    } else {
+      setPinError(r.error || 'Gagal mengubah PIN.');
+    }
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, callback: (url: string) => void) => {
     const file = e.target.files?.[0];
@@ -47,6 +77,73 @@ export const SettingsPanel: React.FC = () => {
           <Save className="w-4 h-4 text-emerald-400" />
           <span>Simpan Pengaturan</span>
         </button>
+      </div>
+
+      {/* Keamanan Akun — ganti PIN admin */}
+      <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0">
+            <ShieldCheck className="w-4.5 h-4.5 text-emerald-400" />
+          </div>
+          <div>
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">Keamanan Akun</h3>
+            <p className="text-[11px] text-slate-500">Ganti PIN admin. Hash disimpan server-side (scrypt) di Supabase, bukan di browser.</p>
+          </div>
+        </div>
+
+        <form onSubmit={changePin} className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs font-bold items-end">
+          <div>
+            <label className="text-[11px] text-slate-600 block mb-1">PIN Saat Ini</label>
+            <div className="relative">
+              <KeyRound className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="password"
+                required
+                value={currentPin}
+                onChange={(e) => { setCurrentPin(e.target.value); setPinError(''); }}
+                placeholder="PIN lama"
+                className="w-full pl-8 pr-3 py-2 rounded-xl border border-slate-200 text-slate-900"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-[11px] text-slate-600 block mb-1">PIN Baru (min. 6 karakter)</label>
+            <input
+              type="password"
+              required
+              minLength={6}
+              value={newPin}
+              onChange={(e) => { setNewPin(e.target.value); setPinError(''); }}
+              placeholder="PIN baru"
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-900"
+            />
+          </div>
+          <div>
+            <label className="text-[11px] text-slate-600 block mb-1">Konfirmasi PIN Baru</label>
+            <input
+              type="password"
+              required
+              minLength={6}
+              value={confirmPin}
+              onChange={(e) => { setConfirmPin(e.target.value); setPinError(''); }}
+              placeholder="Ulangi PIN baru"
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-900"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={pinBusy}
+            className="clay-button-primary bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl flex items-center justify-center gap-2 disabled:opacity-60"
+          >
+            <KeyRound className="w-4 h-4" />
+            {pinBusy ? 'Menyimpan…' : 'Ganti PIN'}
+          </button>
+          {pinError && (
+            <div className="md:col-span-4 -mt-2 px-3 py-2 rounded-xl bg-rose-50 text-rose-600 text-[11px] font-bold border border-rose-200">
+              {pinError}
+            </div>
+          )}
+        </form>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs font-bold">

@@ -59,6 +59,20 @@ export const verifyAdminPin = async (pin: string): Promise<{ ok: boolean; error?
   }
 };
 
+export const changeAdminPin = async (currentPin: string, newPin: string): Promise<{ ok: boolean; error?: string }> => {
+  try {
+    const res = await adminFetch('/api/admin/change-pin', {
+      method: 'POST',
+      body: JSON.stringify({ currentPin, newPin }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (res.ok) return { ok: true };
+    return { ok: false, error: json.error || 'Gagal mengubah PIN.' };
+  } catch {
+    return { ok: false, error: 'Server tidak dapat dijangkau.' };
+  }
+};
+
 const adminFetch = (path: string, opts: RequestInit = {}): Promise<Response> => {
   const headers = new Headers(opts.headers || {});
   headers.set('Content-Type', 'application/json');

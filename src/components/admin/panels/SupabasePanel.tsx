@@ -117,7 +117,7 @@ export const SupabasePanel: React.FC = () => {
               <li><span className="text-blue-600 font-bold">VITE_SUPABASE_URL</span> = https://your-project.supabase.co</li>
               <li><span className="text-blue-600 font-bold">VITE_SUPABASE_ANON_KEY</span> = eyJhbGciOi...</li>
               <li><span className="text-blue-600 font-bold">GEMINI_API_KEY</span> = auto-translate</li>
-              <li><span className="text-emerald-600 font-bold">ADMIN_PIN</span> = server-only (PIN admin)</li>
+              <li><span className="text-emerald-600 font-bold">ADMIN_PIN</span> = server-only (fallback first-run; ganti via Pengaturan → Keamanan Akun)</li>
               <li><span className="text-emerald-600 font-bold">ADMIN_SECRET</span> = server-only (HMAC token signing)</li>
             </ul>
           </div>

@@ -77,6 +77,65 @@ function requireAdmin(req: express.Request, res: express.Response, next: express
   next();
 }
 
+// ------------------------------------------------------------------
+// ADMIN PIN — stored as scrypt hash in admin_config (DB), so admins
+// can rotate the PIN in-app. ADMIN_PIN env is used only as first-run
+// fallback and is migrated into the DB on first successful login or
+// PIN change.
+// ------------------------------------------------------------------
+const PIN_KEY_LEN = 64;
+
+function hashPin(pin: string): { salt: string; hash: string } {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(pin, salt, PIN_KEY_LEN).toString('hex');
+  return { salt, hash };
+}
+
+function verifyPinAgainst(pin: string, salt: string, hash: string): boolean {
+  try {
+    const candidate = crypto.scryptSync(pin, salt, PIN_KEY_LEN);
+    const expected = Buffer.from(hash, 'hex');
+    return candidate.length === expected.length && crypto.timingSafeEqual(candidate, expected);
+  } catch {
+    return false;
+  }
+}
+
+async function getAdminPinConfig() {
+  const supabase = getServerSupabase();
+  if (!supabase) return null;
+  try {
+    const { data } = await supabase
+      .from('admin_config')
+      .select('pin_salt, pin_hash')
+      .eq('id', 'admin')
+      .maybeSingle();
+    if (data && data.pin_salt && data.pin_hash) return data;
+  } catch {
+    /* not configured yet */
+  }
+  return null;
+}
+
+async function saveAdminPin(pin: string): Promise<boolean> {
+  const supabase = getServerSupabase();
+  if (!supabase) return false;
+  const { salt, hash } = hashPin(pin);
+  const { error } = await supabase
+    .from('admin_config')
+    .upsert(
+      { id: 'admin', pin_salt: salt, pin_hash: hash, updated_at: new Date().toISOString() },
+      { onConflict: 'id' }
+    );
+  return !error;
+}
+
+async function adminPinMatches(pin: string): Promise<boolean> {
+  const cfg = await getAdminPinConfig();
+  if (cfg) return verifyPinAgainst(pin, cfg.pin_salt, cfg.pin_hash);
+  return pin === ADMIN_PIN;
+}
+
 // Helper to get server-side Supabase client
 function getServerSupabase() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -121,7 +180,7 @@ app.get('/api/supabase/config', (req, res) => {
 });
 
 // 2b. Admin PIN verification → short-lived HMAC token
-app.post('/api/admin/verify', (req, res) => {
+app.post('/api/admin/verify', async (req, res) => {
   const { pin } = req.body || {};
   if (typeof pin !== 'string' || pin.length === 0) {
     return res.status(400).json({ error: 'PIN required.' });
@@ -129,11 +188,43 @@ app.post('/api/admin/verify', (req, res) => {
   if (rateLimited(req)) {
     return res.status(429).json({ error: 'Too many attempts. Try again in 10 minutes.' });
   }
-  if (pin !== ADMIN_PIN) {
+  const ok = await adminPinMatches(pin);
+  if (!ok) {
     return res.status(401).json({ error: 'Invalid PIN.' });
+  }
+  // First successful login with the env fallback → migrate into DB so
+  // the PIN is persistent and UI-rotatable from now on.
+  if (!(await getAdminPinConfig())) {
+    await saveAdminPin(pin);
   }
   const expiresAt = Date.now() + TOKEN_TTL_MS;
   res.json({ success: true, token: signToken(expiresAt), expiresAt });
+});
+
+// 2c. Change admin PIN — requires a valid admin token + current PIN
+app.post('/api/admin/change-pin', requireAdmin, async (req, res) => {
+  const { currentPin, newPin } = req.body || {};
+  if (typeof newPin !== 'string' || newPin.length < 6) {
+    return res.status(400).json({ error: 'PIN baru minimal 6 karakter.' });
+  }
+  if (typeof currentPin !== 'string' || currentPin.length === 0) {
+    return res.status(400).json({ error: 'PIN saat ini wajib diisi.' });
+  }
+  if (rateLimited(req)) {
+    return res.status(429).json({ error: 'Too many attempts. Try again in 10 minutes.' });
+  }
+  const curOk = await adminPinMatches(currentPin);
+  if (!curOk) {
+    return res.status(401).json({ error: 'PIN saat ini salah.' });
+  }
+  if (newPin === currentPin) {
+    return res.status(400).json({ error: 'PIN baru harus berbeda dari PIN lama.' });
+  }
+  const saved = await saveAdminPin(newPin);
+  if (!saved) {
+    return res.status(503).json({ error: 'Database admin_config tidak tersedia.' });
+  }
+  res.json({ success: true, message: 'Admin PIN updated.' });
 });
 
 // 3. Submit contact inquiry
