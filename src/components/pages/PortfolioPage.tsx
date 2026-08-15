@@ -4,12 +4,20 @@ import { Category } from '../../types';
 import { ScrollReveal } from '../ui/ScrollReveal';
 import { Search, X, ArrowUpRight, CheckCircle2 } from 'lucide-react';
 
-const CATEGORIES: Category[] = ['All', 'UI/UX Design', 'Graphic & Brand', 'Social Media & Print', 'Mobile App'];
+const CATEGORY_ORDER: Category[] = ['UI/UX Design', 'Graphic & Brand', 'Social Media & Print', 'Mobile App'];
 
 export const PortfolioPage: React.FC = () => {
   const { t, projects, selectedProject, setSelectedProject, getContent } = useApp();
-  const [activeCategory, setActiveCategory] = useState<Category>('All');
+  const [activeCategory, setActiveCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Category filters are derived from the live DB projects, not a hardcoded list.
+  const presentCategories = Array.from(new Set(projects.map((p) => p.category).filter(Boolean) as string[]));
+  const categories: string[] = [
+    'All',
+    ...CATEGORY_ORDER.filter((c) => presentCategories.includes(c)),
+    ...presentCategories.filter((c) => !CATEGORY_ORDER.includes(c as Category)),
+  ];
 
   // Close case study with Escape
   useEffect(() => {
@@ -36,7 +44,7 @@ export const PortfolioPage: React.FC = () => {
       {/* Header */}
       <section className="pt-8 space-y-5">
         <ScrollReveal duration={0.6}>
-          <span className="section-eyebrow block mb-3">Portfolio</span>
+          <span className="section-eyebrow block mb-3">{getContent('portfolio', 'header.eyebrow', 'Portfolio')}</span>
           <h1 className="display-font font-bold tracking-tight text-ink leading-[1.02] text-[clamp(2.25rem,6vw,4.5rem)]">
             {getContent('portfolio', 'hero.title', t.portfolio.title)}
           </h1>
@@ -47,7 +55,7 @@ export const PortfolioPage: React.FC = () => {
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-t hairline pt-6">
             {/* Category filter — horizontal scroll on mobile, wrap on desktop */}
             <div className="flex items-center gap-2 -mx-4 px-4 lg:mx-0 lg:px-0 lg:flex-wrap overflow-x-auto scrollbar-none">
-              {CATEGORIES.map((cat) => (
+              {categories.map((cat) => (
                 <button
                   key={cat}
                   onClick={() => setActiveCategory(cat)}
@@ -133,7 +141,7 @@ export const PortfolioPage: React.FC = () => {
           ))
         ) : (
           <div className="col-span-full border hairline bg-paper p-12 text-center space-y-4">
-            <p className="text-sm text-ink-muted">No projects found matching your criteria.</p>
+            <p className="text-sm text-ink-muted">{getContent('portfolio', 'empty.title', 'No projects found matching your criteria.')}</p>
             <button
               onClick={() => {
                 setActiveCategory('All');
@@ -141,7 +149,7 @@ export const PortfolioPage: React.FC = () => {
               }}
               className="btn-ghost text-xs"
             >
-              Reset Filters
+              {getContent('portfolio', 'empty.reset', 'Reset Filters')}
             </button>
           </div>
         )}

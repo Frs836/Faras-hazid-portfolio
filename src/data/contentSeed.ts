@@ -135,10 +135,49 @@ export const SITE_CONTENT_SEED: PageContentRow[] = [
 
   // ================= FOOTER =================
   text('footer', 'cta', 'title', 'Have an idea worth building?', 'Punya ide yang layak dibangun?', '実現したいアイデアはありますか？', 'لديك فكرة تستحق التقدير؟'),
+  text('footer', 'cta', 'btn', "Let's talk", 'Mari bicara', '相談する', 'لنتحدث'),
+  text('footer', 'lt', 'menu', 'Menu', 'Menu', 'メニュー', 'القائمة'),
+  text('footer', 'lt', 'connect', 'Connect', 'Terhubung', 'つながる', 'تواصل'),
+  text('footer', 'lt', 'status', 'Status', 'Status', 'ステータス', 'الحالة'),
   textarea('footer', 'brand', 'description', 'Focal Hyperspace Creative — the personal brand of Faras Hazid, delivering UI/UX, brand identity, and print that converts.', 'Focal Hyperspace Creative — personal branding Faras Hazid, menghadirkan UI/UX, identitas merek, dan desain cetak.', 'Focal Hyperspace Creative — ファラス・ハジドのパーソナルブランド。', 'Focal Hyperspace Creative — العلامة الشخصية لفراس حازد.'),
   text('footer', 'brand', 'status', 'Open for freelance & remote contracts', 'Terbuka untuk freelance & kontrak remote', 'フリーランス・リモート歓迎', 'متاح للمشروعات الحرة والبعانية'),
   text('footer', 'brand', 'copyright', '© 2026 FARAS HAZID — Focal Hyperspace Creative', '© 2026 FARAS HAZID — Focal Hyperspace Creative', '© 2026 FARAS HAZID — Focal Hyperspace Creative', '© 2026 فراس حازد — Focal Hyperspace Creative'),
   ...list('footer', 'brand', 'marquee', ['UI/UX Design', 'Brand Identity', 'Graphic Design', 'Web Development', 'Print Layout', 'Social Media', 'Motion']),
+
+  // ================= EDITORIAL — visible labels/eyebrows/static copy (DB > i18n fallback) =================
+  // Home
+  text('home', 'hero', 'loc_a', 'Based in Indonesia', 'Berbasis di Indonesia', 'インドネシア拠点', 'مقيم في إندونيسيا'),
+  text('home', 'hero', 'loc_b', 'Working worldwide', 'Bekerja di seluruh dunia', '世界中で活動中', 'أعمل حول العالم'),
+  // About
+  text('about', 'header', 'eyebrow', 'About', 'Tentang', '私について', 'عني'),
+  text('about', 'header', 'design', '01 — Design', '01 — Desain', '01 — デザイン', '01 — تصميم'),
+  text('about', 'header', 'personal', '02 — Personal', '02 — Personal', '02 — パーソナル', '02 — شخصي'),
+  text('about', 'header', 'experience', 'Experience', 'Pengalaman', '経歴', 'الخبرات'),
+  text('about', 'header', 'education', 'Education', 'Pendidikan', '学歴', 'التعليم'),
+  text('about', 'header', 'capabilities', 'Capabilities', 'Kemampuan', 'スキル', 'القدرات'),
+  text('about', 'tools', 'sub', 'Design software, frameworks, and the craft behind the work.', 'Software desain, framework, dan keahlian di balik karya.', '作品の背景にあるデザインツールとスキル。', 'أدوات التصميم والخبرات خلف الأعمال.'),
+  // Portfolio
+  text('portfolio', 'header', 'eyebrow', 'Portfolio', 'Portofolio', '作品集', 'معرض الأعمال'),
+  text('portfolio', 'empty', 'title', 'No projects found matching your criteria.', 'Tidak ada proyek yang cocok dengan kriteria Anda.', '条件に一致するプロジェクトが見つかりません。', 'لا توجد مشاريع تطابق معاييرك.'),
+  text('portfolio', 'empty', 'reset', 'Reset Filters', 'Reset Filter', 'フィルターをリセット', 'إعادة تعيين الفلاتر'),
+  // Services
+  text('services', 'header', 'eyebrow', 'Services', 'Layanan', 'サービス', 'الخدمات'),
+  text('services', 'offer', 'eyebrow', '01 — What I do', '01 — Yang saya kerjakan', '01 — 提供サービス', '01 — خدماتي'),
+  text('services', 'pricing', 'eyebrow', '02 — Pricing', '02 — Harga', '02 — 料金', '02 — الأسعار'),
+  text('services', 'pricing', 'title', 'Transparent Packages', 'Paket Transparan', '明確なパッケージ', 'باقات شفافة'),
+  text('services', 'pricing', 'sub', 'Fixed packages in USD & IDR — every deliverable listed upfront.', 'Paket tetap dalam USD & IDR — semua deliverable tercantum di awal.', 'USD・IDR表示の固定プラン。納品物も明記。', 'باقات ثابتة بالدولار والروبية — كل شيء موضح مسبقاً.'),
+  text('services', 'est', 'eyebrow', '03 — Estimator', '03 — Estimator', '03 — 見積もり', '03 — الحاسبة'),
+  text('services', 'est', 'title', 'Transparent cost estimator', 'Estimator biaya transparan', '透明な費用見積もり', 'حاسبة تكلفة شفافة'),
+  text('services', 'est', 'sub', 'Pick a service, scope, and timeline — see USD & IDR before reaching out.', 'Pilih layanan, skala, dan durasi — lihat USD & IDR sebelum menghubungi.', 'サービス・規模・期間を選ぶと、先にUSDとIDRが分かります。', 'اختر الخدمة والنطاق والمدة — لترى التكلفة قبل التواصل.'),
+  text('services', 'why', 'eyebrow', '04 — Why me', '04 — Kenapa saya', '04 — 選ばれる理由', '04 — لماذا أنا'),
+  text('services', 'faq', 'eyebrow', '05 — FAQ', '05 — FAQ', '05 — よくある質問', '05 — الأسئلة الشائعة'),
+  text('services', 'cta', 'kicker', 'Have a project in mind?', 'Punya proyek dalam pikiran?', 'プロジェクトのご相談はありますか？', 'هل لديك مشروع في ذهنك؟'),
+  text('services', 'cta', 'title', "Let's make something unforgettable.", 'Mari ciptakan sesuatu yang berkesan.', '忘れられないものを作りましょう。', 'لنصنع شيئاً لا يُنسى.'),
+  text('services', 'cta', 'btn', 'Start a project', 'Mulai Proyek', 'プロジェクトを開始', 'ابدأ مشروع'),
+  // Contact
+  text('contact', 'header', 'eyebrow', 'Contact', 'Kontak', 'お問い合わせ', 'تواصل'),
+  text('contact', 'info', 'location', 'Indonesia (UTC+7)', 'Indonesia (UTC+7)', 'インドネシア (UTC+7)', 'إندونيسيا (UTC+7)'),
+  text('contact', 'info', 'hours', 'Mon - Sat: 08:00 - 18:00 WIB', 'Senin - Sabtu: 08:00 - 18:00 WIB', '月-土: 8:00-18:00 WIB', 'الإثنين - السبت: 08:00 - 18:00 بتوقيت إندونيسيا'),
 ];
 
 export const FAQ_SEED: DbFaq[] = [

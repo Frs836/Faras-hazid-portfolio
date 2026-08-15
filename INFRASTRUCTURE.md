@@ -43,11 +43,22 @@ admin. Commands: `/menu`, `/proyek` (list/baru/tulis/hapus), `/paket` (sama),
 Reaches the same Supabase tables as the public site. Webhook: `POST /api/bot/webhook`
 (secret-token verified, chat allowlist), registration via `POST /api/bot/register`.
 
-Remaining phases:
+**Phase-1 frontend integration (public site ← DB)** — the primary work order:
+single source of truth for contact/social (siteSettings), CV is PDF-first
+(dashboards upload → direct link, dummy modal removed), `service` offerings get a
+full DB lifecycle (table + admin panel + auto-persist), visible editorial strings
+moved to `page_content` (DB overrides i18n fallback), portfolio category filters
+derived from DB projects. Requires running
+`supabase/migrations/20260815_add_services.sql` once.
+
+Remaining phases (bot 2.0):
+- **Smart pickers & steppers** — tap a project from an inline-keyboard list instead
+  of typing IDs; guided `/proyek baru` in steps.
+- **Cover every dashboard module** — services, experience, estimator config, site
+  settings, page content, PIN change via chat.
 - **Natural Q&A**: Gemini RAG over portfolio content (key already present).
-- **Search & automation**: full-text search; scheduled Edge Functions (cron).
-- **Google Drive / local PC**: OAuth flow + lightweight agent loop — needs care
-  with Vercel serverless time limits.
+- **Google Drive / local PC**: OAuth flow + light agent loop — needs care with
+  Vercel serverless time limits.
 
 ---
 

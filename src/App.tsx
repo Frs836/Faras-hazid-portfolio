@@ -4,7 +4,6 @@ import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
 import { ToastContainer } from './components/ui/ToastContainer';
 import { PrdSrsModal } from './components/modals/PrdSrsModal';
-import { CvDownloadModal } from './components/modals/CvDownloadModal';
 
 import { HomePage } from './components/pages/HomePage';
 import { AboutPage } from './components/pages/AboutPage';
@@ -50,9 +49,6 @@ const MainLayout: React.FC = () => {
 
       {/* PRD/SRS Documentation Modal */}
       <PrdSrsModal />
-
-      {/* Dual CV Download & Preview Modal */}
-      <CvDownloadModal />
 
       {/* Sticky Editorial Navbar */}
       <Navbar />

@@ -53,6 +53,8 @@ import {
   fetchSkillsFromSupabase,
   saveExperiencesToSupabase,
   saveSkillsToSupabase,
+  fetchServicesFromSupabase,
+  saveServicesToSupabase,
   savePackagesToSupabase,
   saveEstimatorConfigToSupabase,
   saveSiteSettingsToSupabase,
@@ -313,6 +315,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const loadedPackagesRef = useRef(false);
   const loadedEstimatorRef = useRef(false);
   const loadedSettingsRef = useRef(false);
+  const loadedServicesRef = useRef(false);
 
   const [analytics, setAnalytics] = useState<AnalyticsData>(EMPTY_ANALYTICS);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
@@ -382,6 +385,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loadedSkillsRef.current = true;
       }
     });
+    // Services ("What I do") — live from the DB
+    fetchServicesFromSupabase().then((list) => {
+      if (list) {
+        if (list.length > 0) setServices(list);
+        loadedServicesRef.current = true;
+      }
+    });
     // Packages propagation (admin edits reach visitors)
     fetchPackagesFromSupabase().then((list) => {
       if (list && list.length > 0) {
@@ -389,12 +399,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loadedPackagesRef.current = true;
       }
     });
-    // Load editable page content; auto-seed once if DB empty
-    fetchPageContent().then((rows) => {
-      if (rows.length > 0) {
-        setPageContent(rows);
+    // Load editable page content; auto-seed once if DB empty, and merge any
+    // newly-added editorial seed rows so fresh fields appear without a re-seed.
+    fetchPageContent().then(async (rows) => {
+      const existingIds = new Set(rows.map((r) => r.id));
+      const missing = SITE_CONTENT_SEED.filter((r) => !existingIds.has(r.id));
+      if (missing.length > 0) {
+        await seedPageContent(missing);
+        const merged = await fetchPageContent();
+        setPageContent(merged.length ? merged : rows);
       } else {
-        seedPageContent(SITE_CONTENT_SEED).then(() => fetchPageContent().then(setPageContent));
+        setPageContent(rows);
       }
     });
     // Load FAQs; auto-seed once if DB empty
@@ -459,6 +474,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, 800);
     return () => clearTimeout(t);
   }, [siteSettings]);
+
+  // Services auto-persist
+  useEffect(() => {
+    if (!loadedServicesRef.current) return;
+    const t = setTimeout(() => {
+      saveServicesToSupabase(services).catch(() => {});
+    }, 800);
+    return () => clearTimeout(t);
+  }, [services]);
 
   useEffect(() => {
     localStorage.setItem('clayfolio_packages', JSON.stringify(packages));

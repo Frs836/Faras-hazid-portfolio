@@ -54,6 +54,7 @@ DROP TABLE IF EXISTS public.estimator_scopes CASCADE;
 DROP TABLE IF EXISTS public.estimator_timelines CASCADE;
 DROP TABLE IF EXISTS public.experiences CASCADE;
 DROP TABLE IF EXISTS public.skills CASCADE;
+DROP TABLE IF EXISTS public.services CASCADE;
 DROP TABLE IF EXISTS public.messages CASCADE;
 DROP TABLE IF EXISTS public.estimates CASCADE;
 DROP TABLE IF EXISTS public.analytics_events CASCADE;
@@ -166,6 +167,16 @@ CREATE TABLE public.skills (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 8b. Service Offerings ("What I do" on the Services page)
+CREATE TABLE public.services (
+  id TEXT PRIMARY KEY,
+  icon TEXT DEFAULT 'Sparkles',
+  title TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  deliverables TEXT[] DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- 9. Contact Messages Inquiries
 CREATE TABLE public.messages (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -222,6 +233,7 @@ ALTER TABLE public.estimator_scopes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.estimator_timelines ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.experiences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.skills ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.services ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.estimates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.analytics_events ENABLE ROW LEVEL SECURITY;
@@ -236,6 +248,7 @@ CREATE POLICY "Public All estimator_scopes" ON public.estimator_scopes FOR ALL U
 CREATE POLICY "Public All estimator_timelines" ON public.estimator_timelines FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public All experiences" ON public.experiences FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public All skills" ON public.skills FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public All services" ON public.services FOR ALL USING (true) WITH CHECK (true);
 
 -- SENSITIVE TABLES: anon can INSERT (contact/estimate/event), NEVER SELECT/UPDATE/DELETE.
 -- Admin reads these via the Express API (service role + HMAC admin token).

@@ -6,7 +6,7 @@ import { ProjectEstimator } from '../calculator/ProjectEstimator';
 import { ChevronDown, ChevronUp, MessageCircle, Clock, Star, ArrowUpRight } from 'lucide-react';
 
 export const ServicesPage: React.FC = () => {
-  const { t, services, packages, faqs, language, addToast, getContent, setCurrentPage } = useApp();
+  const { t, services, packages, faqs, language, addToast, getContent, setCurrentPage, siteSettings } = useApp();
   const [openFaqId, setOpenFaqId] = useState<string | null>(faqs[0]?.id || null);
 
   // DB-first: any field edited in the dashboard wins; the static i18n map
@@ -40,7 +40,8 @@ export const ServicesPage: React.FC = () => {
     const text = encodeURIComponent(
       `Halo Faras Hazid! Saya tertarik memesan paket "${pkg.name}" (${pkg.priceUSD} USD / ${pkg.priceIDR}). Mohon info selengkapnya.`
     );
-    window.open(`https://wa.me/6285143541287?text=${text}`, '_blank');
+    const wa = siteSettings?.whatsappNumber || '6285143541287';
+    window.open(`https://wa.me/${wa}?text=${text}`, '_blank');
     addToast('Mengarahkan ke WhatsApp', `Membuka chat order untuk ${pkg.name}`, 'info');
   };
 
@@ -49,7 +50,7 @@ export const ServicesPage: React.FC = () => {
       {/* Header */}
       <section className="pt-8 space-y-5">
         <ScrollReveal duration={0.6}>
-          <span className="section-eyebrow block mb-3">Services</span>
+          <span className="section-eyebrow block mb-3">{getContent('services', 'header.eyebrow', 'Services')}</span>
           <h1 className="display-font font-bold tracking-tight text-ink leading-[1.02] text-[clamp(2.25rem,6vw,4.5rem)]">
             {getContent('services', 'hero.title', t.services.title)}
           </h1>
@@ -101,9 +102,9 @@ export const ServicesPage: React.FC = () => {
           <div className="border-b hairline pb-6 space-y-2">
             <span className="section-eyebrow block mb-2">02 — Pricing</span>
             <h2 className="display-font text-2xl sm:text-3xl font-bold tracking-tight text-ink">
-              {t.services.pricingTitle}
+              {getContent('services', 'pricing.title', t.services.pricingTitle)}
             </h2>
-            <p className="text-sm text-ink-muted">{t.services.pricingSub}</p>
+            <p className="text-sm text-ink-muted">{getContent('services', 'pricing.sub', t.services.pricingSub)}</p>
           </div>
         </ScrollReveal>
 
@@ -198,7 +199,7 @@ export const ServicesPage: React.FC = () => {
           <div className="border-b hairline pb-6">
             <span className="section-eyebrow block mb-2">03 — Estimator</span>
             <h2 className="display-font text-2xl sm:text-3xl font-bold tracking-tight text-ink">
-              Transparent cost estimator
+              {getContent('services', 'est.title', 'Transparent cost estimator')}
             </h2>
             <p className="text-sm text-ink-muted mt-1">
               Pick a service, scope, and timeline — see USD & IDR before reaching out.
@@ -279,16 +280,16 @@ export const ServicesPage: React.FC = () => {
         <ScrollReveal>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 bg-ink text-paper p-8 sm:p-12">
             <div className="space-y-2">
-              <span className="mono-label text-paper/60 block">Have a project in mind?</span>
+              <span className="mono-label text-paper/60 block">{getContent('services', 'cta.kicker', 'Have a project in mind?')}</span>
               <h2 className="display-font text-2xl sm:text-3xl font-bold tracking-tight text-paper">
-                Let's make something unforgettable.
+                {getContent('services', 'cta.title', "Let's make something unforgettable.")}
               </h2>
             </div>
             <button
               onClick={() => setCurrentPage('contact')}
               className="btn-accent shrink-0"
             >
-              Start a project
+              {getContent('services', 'cta.btn', 'Start a project')}
               <ArrowUpRight className="w-4 h-4" />
             </button>
           </div>

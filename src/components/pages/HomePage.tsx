@@ -71,9 +71,9 @@ export const HomePage: React.FC = () => {
             </div>
 
             <div className="pt-4 flex items-center gap-6 mono-label text-ink-faint">
-              <span>Based in Indonesia</span>
+              <span>{getContent('home', 'hero.loc_a', 'Based in Indonesia')}</span>
               <span className="text-line" aria-hidden="true">|</span>
-              <span>Working worldwide</span>
+              <span>{getContent('home', 'hero.loc_b', 'Working worldwide')}</span>
             </div>
           </div>
         </ScrollReveal>

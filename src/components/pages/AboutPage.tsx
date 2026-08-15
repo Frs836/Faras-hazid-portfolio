@@ -6,7 +6,7 @@ import { SkillProgressBar, AnimatedSkillBadge } from '../ui/SkillProgressBar';
 import { Download } from 'lucide-react';
 
 export const AboutPage: React.FC = () => {
-  const { t, experiences, skills, openCvModal, siteSettings, getContent, getContentList } = useApp();
+  const { t, experiences, skills, siteSettings, getContent, getContentList } = useApp();
 
   const workExps = experiences.filter((e) => e.type === 'work');
   const eduExps = experiences.filter((e) => e.type === 'education');
@@ -28,7 +28,7 @@ export const AboutPage: React.FC = () => {
 
         <ScrollReveal duration={0.7} delay={0.1} className="lg:col-span-7">
           <div className="space-y-6">
-            <span className="section-eyebrow block">About</span>
+            <span className="section-eyebrow block">{getContent('about', 'header.eyebrow', 'About')}</span>
             <h1 className="display-font font-bold tracking-tight text-ink leading-[1.02] text-[clamp(2rem,5vw,3.75rem)]">
               {getContent('about', 'hero.greeting', t.about.bioGreeting)}
             </h1>
@@ -36,26 +36,28 @@ export const AboutPage: React.FC = () => {
             <p className="text-base text-ink-muted leading-relaxed max-w-xl">{getContent('about', 'hero.bio_full', t.about.bioFull)}</p>
 
             <div className="flex flex-wrap items-center gap-3 pt-2">
-              <button
-                onClick={() => {
-                  if (siteSettings?.cvDownloadUrlEng) window.open(siteSettings.cvDownloadUrlEng, '_blank');
-                  else openCvModal('en');
-                }}
-                className="btn-primary text-xs"
-              >
-                <Download className="w-4 h-4" />
-                {getContent('about', 'hero.cv_en', t.about.downloadCvEn)}
-              </button>
-              <button
-                onClick={() => {
-                  if (siteSettings?.cvDownloadUrlIndo) window.open(siteSettings.cvDownloadUrlIndo, '_blank');
-                  else openCvModal('id');
-                }}
-                className="btn-ghost text-xs"
-              >
-                <Download className="w-4 h-4 text-strong" />
-                {getContent('about', 'hero.cv_id', t.about.downloadCvId)}
-              </button>
+              {siteSettings?.cvDownloadUrlEng ? (
+                <a
+                  href={siteSettings.cvDownloadUrlEng}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-primary text-xs"
+                >
+                  <Download className="w-4 h-4" />
+                  {getContent('about', 'hero.cv_en', t.about.downloadCvEn)}
+                </a>
+              ) : null}
+              {siteSettings?.cvDownloadUrlIndo ? (
+                <a
+                  href={siteSettings.cvDownloadUrlIndo}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-ghost text-xs"
+                >
+                  <Download className="w-4 h-4 text-strong" />
+                  {getContent('about', 'hero.cv_id', t.about.downloadCvId)}
+                </a>
+              ) : null}
             </div>
           </div>
         </ScrollReveal>
@@ -98,7 +100,7 @@ export const AboutPage: React.FC = () => {
       <section className="space-y-8">
         <ScrollReveal>
           <div className="border-b hairline pb-6 space-y-2">
-            <span className="section-eyebrow block">Experience</span>
+            <span className="section-eyebrow block">{getContent('about', 'header.experience', 'Experience')}</span>
             <h2 className="display-font text-2xl sm:text-3xl font-bold tracking-tight text-ink">
               {getContent('about', 'work.title', t.about.workHistory)}
             </h2>
@@ -143,7 +145,7 @@ export const AboutPage: React.FC = () => {
       <section className="space-y-8">
         <ScrollReveal>
           <div className="border-b hairline pb-6 space-y-2">
-            <span className="section-eyebrow block">Education</span>
+            <span className="section-eyebrow block">{getContent('about', 'header.education', 'Education')}</span>
             <h2 className="display-font text-2xl sm:text-3xl font-bold tracking-tight text-ink">
               {getContent('about', 'edu.title', t.about.education)}
             </h2>
@@ -170,11 +172,11 @@ export const AboutPage: React.FC = () => {
       <section className="space-y-8">
         <ScrollReveal>
           <div className="border-b hairline pb-6 space-y-2">
-            <span className="section-eyebrow block">Capabilities</span>
+            <span className="section-eyebrow block">{getContent('about', 'header.capabilities', 'Capabilities')}</span>
             <h2 className="display-font text-2xl sm:text-3xl font-bold tracking-tight text-ink">
               {getContent('about', 'tools.title', t.about.skillsTools)}
             </h2>
-            <p className="text-sm text-ink-muted">{t.about.skillsToolsSub}</p>
+            <p className="text-sm text-ink-muted">{getContent('about', 'tools.sub', t.about.skillsToolsSub)}</p>
           </div>
         </ScrollReveal>
 

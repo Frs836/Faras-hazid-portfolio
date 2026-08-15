@@ -3,13 +3,22 @@ import { ArrowUpRight } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 export const DualBrandBanner: React.FC = () => {
-  const { setCurrentPage, openCvModal, t } = useApp();
+  const { setCurrentPage, siteSettings, t } = useApp();
+
+  const openCv = (lang: 'en' | 'id') => {
+    const url = lang === 'en' ? siteSettings?.cvDownloadUrlEng : siteSettings?.cvDownloadUrlIndo;
+    if (url) window.open(url, '_blank');
+    else {
+      setCurrentPage('about');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-line border hairline">
       {/* Corporate / Recruiters */}
       <button
-        onClick={() => openCvModal('en')}
+        onClick={() => openCv('en')}
         className="group bg-paper p-8 text-left transition-colors hover:bg-paper2"
       >
         <div className="flex items-center justify-between mb-8">

@@ -7,7 +7,7 @@ const idr = (n: number) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n);
 
 export const ProjectEstimator: React.FC = () => {
-  const { t, estimatorServices, estimatorScopes, estimatorTimelines, addToast } = useApp();
+  const { t, estimatorServices, estimatorScopes, estimatorTimelines, addToast, siteSettings } = useApp();
   const [selectedServiceId, setSelectedServiceId] = useState<string>(() => estimatorServices[0]?.id || 'brand-identity');
   const [selectedScopeId, setSelectedScopeId] = useState<string>(() => estimatorScopes[0]?.id || 'starter');
   const [selectedTimelineId, setSelectedTimelineId] = useState<string>(() => estimatorTimelines[0]?.id || 'standard');
@@ -74,7 +74,8 @@ export const ProjectEstimator: React.FC = () => {
     const namePart = contactName.trim() ? `%0ANama: ${contactName.trim()}%0A` : '';
     const waPart = contactPhone.trim() ? `WhatsApp: ${contactPhone.trim()}%0A` : '';
     const text = `Halo Faras (Focal Hyperspace Creative) ini gambaran singkat estimasi proyek saya:${namePart}${waPart}%0A*Layanan:* ${selectedService.name}%0A*Skala Proyek:* ${selectedScope.label}%0A*Waktu Pengerjaan:* ${selectedTimeline.label}%0A*Estimasi Investigasi:* $${estimateUsd} USD (${idr(estimateIdr)})%0A%0AMohon info lebih lanjut ya. Terima kasih!`;
-    window.open(`https://wa.me/6285143541287?text=${text}`, '_blank');
+    const wa = siteSettings?.whatsappNumber || '6285143541287';
+    window.open(`https://wa.me/${wa}?text=${text}`, '_blank');
   };
 
   const StepTag: React.FC<{ n: number }> = ({ n }) => (

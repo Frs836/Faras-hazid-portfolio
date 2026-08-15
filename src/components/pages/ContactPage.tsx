@@ -4,11 +4,13 @@ import { ScrollReveal } from '../ui/ScrollReveal';
 import { Send, MessageCircle, Mail, Phone, MapPin, Clock, Copy, Check, ArrowUpRight } from 'lucide-react';
 import { submitContactInquiry } from '../../services/apiService';
 
-const EMAIL = 'farashazid836@gmail.com';
-const WA_NUMBER = '6285143541287';
+const FALLBACK_EMAIL = 'focalhyperspacecreative@gmail.com';
 
 export const ContactPage: React.FC = () => {
-  const { t, addMessage, addToast, getContent } = useApp();
+  const { t, addMessage, addToast, getContent, siteSettings } = useApp();
+
+  const email = siteSettings?.contactEmail || FALLBACK_EMAIL;
+  const waNumber = siteSettings?.whatsappNumber || '6285143541287';
 
   const [formData, setFormData] = useState({
     name: '',
@@ -84,16 +86,16 @@ export const ContactPage: React.FC = () => {
       return;
     }
     const text = encodeURIComponent(
-      `Halo Faras Hazid!\n\nNama: ${formData.name}\nEmail: ${formData.email}\nLayanan: ${formData.serviceInterest}\nBudget: ${formData.budget}\n\nPesan:\n${formData.message}`
+      `Halo Faras Hazid!\n\nNama: ${formData.name}\nEmail: ${formData.email}\nPhone: ${formData.phone || '-'}\nLayanan: ${formData.serviceInterest}\nBudget: ${formData.budget}\n\nPesan:\n${formData.message}`
     );
-    window.open(`https://wa.me/${WA_NUMBER}?text=${text}`, '_blank');
+    window.open(`https://wa.me/${waNumber}?text=${text}`, '_blank');
     addToast('WhatsApp Chat Opened', 'Redirecting to Faras Hazid on WhatsApp.', 'info');
   };
 
   const handleCopyEmail = () => {
-    navigator.clipboard.writeText(EMAIL);
+    navigator.clipboard.writeText(email);
     setCopiedEmail(true);
-    addToast('Email Copied', `Copied ${EMAIL} to clipboard!`, 'success');
+    addToast('Email Copied', `Copied ${email} to clipboard!`, 'success');
     setTimeout(() => setCopiedEmail(false), 3000);
   };
 
@@ -101,7 +103,7 @@ export const ContactPage: React.FC = () => {
     {
       icon: Mail,
       label: 'Email',
-      value: EMAIL,
+      value: email,
       action: (
         <button
           onClick={handleCopyEmail}
@@ -113,24 +115,29 @@ export const ContactPage: React.FC = () => {
         </button>
       ),
     },
-    { icon: Phone, label: 'WhatsApp / Phone', value: '+62 851 4354 1287', href: `https://wa.me/${WA_NUMBER}` },
-    { icon: MapPin, label: 'Location', value: 'Indonesia (UTC+7)' },
-    { icon: Clock, label: 'Working Hours', value: 'Mon - Sat: 08:00 - 18:00 WIB' },
+    {
+      icon: Phone,
+      label: 'WhatsApp / Phone',
+      value: waNumber ? `+${waNumber}` : '-',
+      href: waNumber ? `https://wa.me/${waNumber}` : undefined,
+    },
+    { icon: MapPin, label: 'Location', value: getContent('contact', 'info.location', 'Indonesia (UTC+7)') },
+    { icon: Clock, label: 'Working Hours', value: getContent('contact', 'info.hours', 'Mon - Sat: 08:00 - 18:00 WIB') },
   ];
 
   const socials = [
-    { name: 'Dribbble', handle: 'Faras Hazid', url: 'https://dribbble.com' },
-    { name: 'Behance', handle: 'Faras Hazid', url: 'https://behance.net' },
-    { name: 'LinkedIn', handle: 'Faras Hazid', url: 'https://linkedin.com' },
-    { name: 'Instagram', handle: '@faras.hazid', url: 'https://instagram.com' },
-  ];
+    { name: 'Dribbble', handle: 'Faras Hazid', url: siteSettings?.socialLinks?.dribbble },
+    { name: 'Behance', handle: 'Faras Hazid', url: siteSettings?.socialLinks?.behance },
+    { name: 'LinkedIn', handle: 'Faras Hazid', url: siteSettings?.socialLinks?.linkedin },
+    { name: 'Instagram', handle: '@faras.hazid', url: siteSettings?.socialLinks?.instagram },
+  ].filter((s) => s.url);
 
   return (
     <div className="space-y-16 py-6 pb-12">
       {/* Header */}
       <section className="pt-8 space-y-5">
         <ScrollReveal duration={0.6}>
-          <span className="section-eyebrow block mb-3">Contact</span>
+          <span className="section-eyebrow block mb-3">{getContent('contact', 'header.eyebrow', 'Contact')}</span>
           <h1 className="display-font font-bold tracking-tight text-ink leading-[1.02] text-[clamp(2.25rem,6vw,4.5rem)]">
             {getContent('contact', 'hero.title', t.contact.title)}
           </h1>

@@ -2,6 +2,7 @@ import { getSupabase, isSupabaseConnected } from '../lib/supabase';
 import { 
   Project, 
   PricingPackage, 
+  ServiceOffering,
   EstimatorServiceOption, 
   EstimatorScopeOption, 
   EstimatorTimelineOption, 
@@ -513,6 +514,7 @@ export const syncAllDataToSupabase = async (payload: {
   estimatorTimelines: EstimatorTimelineOption[];
   experiences: ExperienceItem[];
   skills: SkillItem[];
+  services?: ServiceOffering[];
   siteSettings?: SiteSettings;
 }): Promise<{ success: boolean; syncedTables: string[]; errors: string[] }> => {
   const syncedTables: string[] = [];
@@ -662,6 +664,25 @@ export const syncAllDataToSupabase = async (payload: {
     else syncedTables.push(`Skills (${skillRows.length} items)`);
   } catch (err: any) {
     errors.push(`skills: ${err.message}`);
+  }
+
+  // 7b. Seed Services ("What I do")
+  if (payload.services && payload.services.length > 0) {
+    try {
+      const serviceRows = payload.services.map((s) => ({
+        id: s.id,
+        icon: s.icon || 'Sparkles',
+        title: s.title || '',
+        description: s.description || '',
+        deliverables: s.deliverables || [],
+        created_at: new Date().toISOString(),
+      }));
+      const { error } = await supabase.from('services').upsert(serviceRows, { onConflict: 'id' });
+      if (error) errors.push(`services: ${error.message}`);
+      else syncedTables.push(`Services (${serviceRows.length} items)`);
+    } catch (err: any) {
+      errors.push(`services: ${err.message}`);
+    }
   }
 
   // 8. Seed Site Settings (Profile & Web)
@@ -1033,6 +1054,69 @@ export const fetchSkillsFromSupabase = async (): Promise<SkillItem[] | null> => 
     console.warn('Supabase fetch skills exception:', err);
   }
   return null;
+};
+
+// Fetch service offerings ("What I do") — the Services page reads these live.
+export const fetchServicesFromSupabase = async (): Promise<ServiceOffering[] | null> => {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.from('services').select('*').order('created_at');
+    if (!error) {
+      return (data || []).map((x: any) => ({
+        id: x.id,
+        icon: x.icon || 'Sparkles',
+        title: x.title,
+        description: x.description || '',
+        deliverables: x.deliverables || [],
+      }));
+    }
+  } catch (err) {
+    console.warn('Supabase fetch services exception:', err);
+  }
+  return null;
+};
+
+export const saveServicesToSupabase = async (services: ServiceOffering[]): Promise<boolean> => {
+  const supabase = getSupabase();
+  if (!supabase || services.length === 0) return false;
+  try {
+    const rows = services.map((s) => ({
+      id: s.id,
+      icon: s.icon || 'Sparkles',
+      title: s.title || '',
+      description: s.description || '',
+      deliverables: s.deliverables || [],
+      created_at: new Date().toISOString(),
+    }));
+    const { error } = await supabase.from('services').upsert(rows, { onConflict: 'id' });
+    if (error && error.message && error.message.includes('column')) {
+      // An existing table may lack deliverables — degrade gracefully.
+      const minimal = rows.map(({ deliverables, ...rest }) => rest);
+      const retry = await supabase.from('services').upsert(minimal, { onConflict: 'id' });
+      if (retry.error) {
+        console.warn('saveServicesToSupabase (retry) error:', retry.error.message);
+        return false;
+      }
+    } else if (error) {
+      console.warn('saveServicesToSupabase error:', error.message);
+      return false;
+    }
+    try {
+      const keep = rows.map((r) => r.id);
+      const { data: existing } = await supabase.from('services').select('id');
+      const stale = (existing || []).map((r: any) => r.id).filter((id: string) => !keep.includes(id));
+      if (stale.length > 0) {
+        await supabase.from('services').delete().in('id', stale);
+      }
+    } catch (reconErr) {
+      console.warn('saveServicesToSupabase reconcile error:', reconErr);
+    }
+    return true;
+  } catch (err: any) {
+    console.warn('saveServicesToSupabase exception:', err);
+    return false;
+  }
 };
 
 // ------------------------------------------------------------

@@ -22,12 +22,12 @@ export const Footer: React.FC = () => {
     : MARQUEE_WORDS;
 
   const socials = [
-    { label: 'Instagram', url: siteSettings?.socialLinks?.instagram || 'https://instagram.com' },
-    { label: 'Dribbble', url: siteSettings?.socialLinks?.dribbble || 'https://dribbble.com' },
-    { label: 'Behance', url: siteSettings?.socialLinks?.behance || 'https://behance.net' },
-    { label: 'LinkedIn', url: siteSettings?.socialLinks?.linkedin || 'https://linkedin.com' },
-    { label: 'GitHub', url: siteSettings?.socialLinks?.github || 'https://github.com' },
-  ];
+    { label: 'Instagram', url: siteSettings?.socialLinks?.instagram || '' },
+    { label: 'Dribbble', url: siteSettings?.socialLinks?.dribbble || '' },
+    { label: 'Behance', url: siteSettings?.socialLinks?.behance || '' },
+    { label: 'LinkedIn', url: siteSettings?.socialLinks?.linkedin || '' },
+    { label: 'GitHub', url: siteSettings?.socialLinks?.github || '' },
+  ].filter((s) => s.url);
 
   const nav = [
     { id: 'home' as const, label: t.nav.home },
@@ -60,7 +60,7 @@ export const Footer: React.FC = () => {
           {/* CTA / wordmark */}
           <div className="max-w-xl">
             <span className="section-eyebrow block mb-4">
-              {siteSettings?.contactEmail || 'hello@farashazid.com'}
+              {getContent('footer', 'cta.email', siteSettings?.contactEmail || '')}
             </span>
             <h2 className="display-font text-4xl sm:text-6xl font-bold leading-[1.02] tracking-tight text-ink">
               {getContent('footer', 'cta.title', 'Have an idea worth building?')}
@@ -72,7 +72,7 @@ export const Footer: React.FC = () => {
               }}
               className="mt-8 btn-primary"
             >
-              Let's talk
+              {getContent('footer', 'cta.btn', "Let's talk")}
               <span aria-hidden="true">→</span>
             </button>
           </div>
@@ -80,7 +80,7 @@ export const Footer: React.FC = () => {
           {/* Link columns */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-10">
             <div>
-              <span className="section-eyebrow block mb-4">Menu</span>
+              <span className="section-eyebrow block mb-4">{getContent('footer', 'lt.menu', 'Menu')}</span>
               <ul className="space-y-2.5">
                 {nav.map((item) => (
                   <li key={item.id}>
@@ -99,7 +99,7 @@ export const Footer: React.FC = () => {
             </div>
 
             <div>
-              <span className="section-eyebrow block mb-4">Connect</span>
+              <span className="section-eyebrow block mb-4">{getContent('footer', 'lt.connect', 'Connect')}</span>
               <ul className="space-y-2.5">
                 {socials.map((s) => (
                   <li key={s.label}>
@@ -117,7 +117,7 @@ export const Footer: React.FC = () => {
             </div>
 
             <div className="col-span-2 sm:col-span-1">
-              <span className="section-eyebrow block mb-4">Status</span>
+              <span className="section-eyebrow block mb-4">{getContent('footer', 'lt.status', 'Status')}</span>
               <div className="inline-flex items-center gap-2 text-sm text-ink">
                 <span className="w-2 h-2 rounded-full bg-accent" aria-hidden="true" />
                 {getContent('footer', 'brand.status', 'Open for freelance & remote contracts')}
