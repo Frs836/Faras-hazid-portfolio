@@ -37,22 +37,17 @@ Legend: ✅ shipped and working · ⚠️ shipped but needs follow-up · 🔜 ro
 
 ## Roadmap — Telegram AI assistant ("FarasBot", OpenClaw-style but free)
 
-Deferred project — parked here so it is not lost. Goal: a Telegram chatbot that
-reaches into this same infrastructure.
+**STATUS: MVP shipped** — private webhook bot (`/@farluxbot`) acting as a second
+admin. Commands: `/menu`, `/proyek` (list/baru/tulis/hapus), `/paket` (sama),
+`/lead` (list/baca/hapus), `/skill`, `/faq`, `/stats`, `/kontak`, `/help`.
+Reaches the same Supabase tables as the public site. Webhook: `POST /api/bot/webhook`
+(secret-token verified, chat allowlist), registration via `POST /api/bot/register`.
 
-- **MVP**: Bot via BotFather; receives commands in chat; answers from this repo's
-  data (portfolio/projects/skills/pricing) using the existing `analytics_events`,
-  `projects`, `packages` tables + Gemini API (key already present).
-- **CRUD from PC**: bot commands → Express API (admin-token gated) → manage
-  projects/packages/content remotely from Telegram.
-- **Search & automation**: Supabase full-text search over portfolio content;
-  scheduled Edge Functions (cron) for reminders/reports.
-- **Google Drive / local PC**: later phase — OAuth flow (Google Picker/Drive API)
-  and a lightweight agent loop. Free-tier constraints: Vercel serverless has
-  request-time limits — long-running agent work needs Edge Functions or a cron
-  queue. Documented here; build AFTER portfolio is fully shipped.
-
-Milestone: reuse `TELEGRAM_BOT_TOKEN` already wired for lead notifications.
+Remaining phases:
+- **Natural Q&A**: Gemini RAG over portfolio content (key already present).
+- **Search & automation**: full-text search; scheduled Edge Functions (cron).
+- **Google Drive / local PC**: OAuth flow + lightweight agent loop — needs care
+  with Vercel serverless time limits.
 
 ---
 
@@ -79,6 +74,8 @@ Milestone: reuse `TELEGRAM_BOT_TOKEN` already wired for lead notifications.
 - `ADMIN_SECRET` (server; must be a long random string — revokes all tokens on rotate)
 - `GEMINI_API_KEY` (server)
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_CHAT_ID` (server)
+- `BOT_WEBHOOK_SECRET` (server; FarasBot webhook signing)
+- `TELEGRAM_ALLOWED_CHAT_IDS` (server; comma CSV of chats allowed to talk to the bot)
 
 **Apply schema changes**
 - Full reset script: `SUPABASE_SQL_SCHEMA` (src/lib/supabase.ts) — destructive, DROPs tables.

@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
+import { registerBotRoutes } from './bot';
 
 export const config = {
   maxDuration: 60,
@@ -852,6 +853,8 @@ app.post('/api/translate', async (req, res) => {
 
 // Global error handler — uncaught async errors become clean JSON 500s
 // (never leak stack traces to the client) and get logged server-side.
+registerBotRoutes(app, { getServerSupabase, requireAdmin, log: console.log });
+
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Unhandled route error:', err);
   res.status(500).json({ error: 'Internal server error.' });
