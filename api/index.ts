@@ -6,7 +6,7 @@ import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
-import { registerBotRoutes } from './bot';
+import { registerBotRoutes } from './lib/bot';
 
 export const config = {
   maxDuration: 60,
