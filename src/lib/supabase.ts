@@ -105,11 +105,15 @@ CREATE TABLE public.packages (
   title TEXT NOT NULL,
   description TEXT,
   price TEXT,
+  price_usd NUMERIC DEFAULT 0,
   timeline TEXT,
   features TEXT[] DEFAULT '{}',
   is_popular BOOLEAN DEFAULT false,
   badge TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  recommended_for TEXT DEFAULT '',
+  period TEXT DEFAULT 'per project',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- 4. Calculator Estimator Service Packages & Deliverables
@@ -158,6 +162,7 @@ CREATE TABLE public.skills (
   category TEXT DEFAULT 'Design',
   level INT DEFAULT 90,
   icon TEXT DEFAULT 'Figma',
+  color TEXT DEFAULT 'amber',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

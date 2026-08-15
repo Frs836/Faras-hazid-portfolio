@@ -1,6 +1,6 @@
 import React from 'react';
 import { useApp } from '../../../context/AppContext';
-import { saveSiteSettingsToSupabase, changeAdminPin } from '../../../services/apiService';
+import { saveSiteSettingsToSupabase, changeAdminPin, uploadAsset } from '../../../services/apiService';
 import { Save, Settings, User, Phone, UploadCloud, ShieldCheck, KeyRound } from 'lucide-react';
 
 export const SettingsPanel: React.FC = () => {
@@ -36,14 +36,20 @@ export const SettingsPanel: React.FC = () => {
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, callback: (url: string) => void) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, callback: (url: string) => void) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const cloudUrl = await uploadAsset(file);
+    if (cloudUrl) {
+      callback(cloudUrl);
+      addToast('File Diunggah!', `${file.name} diunggah ke cloud (Supabase Storage).`, 'success');
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (event) => {
       if (event.target?.result) {
         callback(event.target.result as string);
-        addToast('File Diunggah!', `File ${file.name} berhasil dimuat.`, 'success');
+        addToast('File Diunggah!', `${file.name} dimuat (lokal).`, 'info');
       }
     };
     reader.readAsDataURL(file);

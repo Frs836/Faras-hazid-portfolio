@@ -663,6 +663,46 @@ app.get('/api/analytics', requireAdmin, async (req, res) => {
   }
 });
 
+// 9g. Asset upload (image / CV / PDF) — ADMIN ONLY.
+// Uploads to a public Supabase Storage bucket, returns the public URL.
+// Keeps heavy base64/data-URL payloads out of the DB and localStorage.
+const ASSET_BUCKET = 'portfolio-assets';
+
+app.post('/api/upload', requireAdmin, async (req, res) => {
+  const { base64, fileType = 'application/octet-stream', folder = 'uploads' } = req.body || {};
+  if (typeof base64 !== 'string' || base64.length === 0) {
+    return res.status(400).json({ error: 'base64 payload required.' });
+  }
+  if (base64.length > 10 * 1024 * 1024) {
+    return res.status(413).json({ error: 'File too large (max 10MB).' });
+  }
+  const buf = Buffer.from(base64, 'base64');
+  const supabase = getServerSupabase();
+  if (!supabase) return res.status(503).json({ error: 'Supabase credentials not configured.' });
+
+  try {
+    const { error: bucketError } = await supabase.storage.createBucket(ASSET_BUCKET, { public: true });
+    if (bucketError && !String(bucketError.message).includes('already exists')) {
+      console.error('Create bucket error:', bucketError.message);
+    }
+    const ext = (fileType.split('/')[1] || 'bin').replace(/[^a-z0-9]/gi, '').slice(0, 10) || 'bin';
+    const safeFolder = String(folder).replace(/[^a-zA-Z0-9_-]/g, '');
+    const objectPath = `${safeFolder}/${Date.now()}_${crypto.randomBytes(4).toString('hex')}.${ext}`;
+
+    const { error } = await supabase.storage.from(ASSET_BUCKET).upload(objectPath, buf, {
+      contentType: fileType,
+      upsert: false,
+    });
+    if (error) return res.status(500).json({ error: error.message });
+
+    const { data } = supabase.storage.from(ASSET_BUCKET).getPublicUrl(objectPath);
+    res.json({ success: true, url: data.publicUrl });
+  } catch (err: any) {
+    console.error('Upload error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ----------------------------------------------------
 // HEADLESS CONTENT CMS — editable editorial copy + FAQs
 // ----------------------------------------------------

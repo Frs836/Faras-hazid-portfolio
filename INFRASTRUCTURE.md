@@ -14,8 +14,8 @@ Supabase Postgres (DB + RLS) · Vercel (hosting/edge) · Git + GitHub (VCS).
 | # | Pillar | Status | Notes / proof |
 |---|--------|--------|---------------|
 | 1 | Frontend | ✅ Done | React SPA, clean-path routing (`/about/`, no `#`), i18n (EN/ID/JA/AR), 404 trap, dashboard overlay. |
-| 2 | APIs & Backend Logic | ✅ Done | Express API in `api/index.ts` (`/api/health`, `/api/admin/*`, `/api/contact`, `/api/estimates`, `/api/projects`, `/api/messages`, `/api/estimates`, `/api/events`, `/api/analytics`, `/api/content`, `/api/faqs`, `/api/translate`). JSON error handler added. |
-| 3 | Database & Storage | ⚠️ Gap | Postgres ✅ + migrations via MCP. Image/CV uploads stored as data-URLs in DB/localStorage — **must move to object storage (Supabase Storage / S3)**. |
+| 2 | APIs & Backend Logic | ✅ Done | Express API in `api/index.ts` (`/api/health`, `/api/admin/*`, `/api/contact`, `/api/estimates`, `/api/projects`, `/api/messages`, `/api/estimates`, `/api/events`, `/api/analytics`, `/api/upload`, `/api/content`, `/api/faqs`, `/api/translate`). JSON error handler added. Integration fixes: lead ingestion deduped (server-first, client fallback), estimator + site-settings auto-persist added, packages/skills upserts column-fallback-safe. |
+| 3 | Database & Storage | ✅ Done | Postgres ✅ + migrations via MCP. Uploads (images/CV/PDF) now go to **Supabase Storage** (public bucket `portfolio-assets`, admin-gated `/api/upload`, URL stored in DB) with data-URL fallback. **Pending**: run `supabase/migrations/20260815_integration_columns.sql` once to enable full package/skill/settings columns. |
 | 4 | Auth & Permissions | ✅ Done | PIN server-verify + HMAC token (12h) + rate-limit. PIN rotatable in-app (scrypt in `admin_config`). RLS locked. Multi-admin (Supabase Auth) = roadmap. |
 | 5 | Hosting & Deployment | ✅ Done | Vercel static + serverless function. `vercel.json` rewrites (SPA fallback + `/api`). Server envs set in Vercel project. |
 | 6 | Cloud & Compute (optional) | ✅ Done | Supabase managed Postgres (Singapore region). Edge/CDN via Vercel. Edge Functions = roadmap (chatbot). |
@@ -32,9 +32,8 @@ Legend: ✅ shipped and working · ⚠️ shipped but needs follow-up · 🔜 ro
 
 ## Known gaps → action list (in priority order)
 
-1. **Object storage for uploads** — move image/PDF uploads from data-URLs to Supabase Storage buckets; keep signed URLs in DB. (Pillar 3)
-2. **Sentry** — capture frontend + serverless errors; alert to Telegram. (Pillar 11)
-3. **Multi-admin (Supabase Auth)** — when more than one admin is needed; replaces single-PIN gate. (Pillar 4)
+1. **Sentry** — capture frontend + serverless errors; alert to Telegram. (Pillar 11)
+2. **Multi-admin (Supabase Auth)** — when more than one admin is needed; replaces single-PIN gate. (Pillar 4)
 
 ## Roadmap — Telegram AI assistant ("FarasBot", OpenClaw-style but free)
 
@@ -83,4 +82,8 @@ Milestone: reuse `TELEGRAM_BOT_TOKEN` already wired for lead notifications.
 
 **Apply schema changes**
 - Full reset script: `SUPABASE_SQL_SCHEMA` (src/lib/supabase.ts) — destructive, DROPs tables.
-- Prefer incremental migrations via Supabase SQL Editor for live data.
+- Incremental migrations: `supabase/migrations/` — run each **once** in Supabase SQL Editor.
+- **Required once (integration):** `supabase/migrations/20260815_integration_columns.sql` —
+  adds `packages.price_usd / recommended_for / period / updated_at`, `skills.color`,
+  `site_settings.cv_download_url_indo / _eng`. The app works without it (fallback paths),
+  but full-field persistence requires it.

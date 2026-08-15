@@ -172,6 +172,29 @@ export const trackEvent = (type: 'page_visit' | 'project_view' | 'cv_download' |
   } catch { /* ignore */ }
 };
 
+// Upload a file to Supabase Storage via the admin API (admin token required).
+// Returns a public URL on success, null on failure (caller falls back to data-URL).
+export const uploadAsset = async (file: File): Promise<string | null> => {
+  try {
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String((reader.result as string).split(',')[1] || ''));
+      reader.onerror = () => reject(new Error('read failed'));
+      reader.readAsDataURL(file);
+    });
+    if (!base64) return null;
+    const res = await adminFetch('/api/upload', {
+      method: 'POST',
+      body: JSON.stringify({ base64, fileType: file.type || 'application/octet-stream', folder: 'uploads' }),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.url || null;
+  } catch {
+    return null;
+  }
+};
+
 
 export interface ContactFormData {
   name: string;
@@ -210,12 +233,14 @@ export const checkBackendStatus = async () => {
   };
 };
 
-// Submit Contact Inquiry
+// Submit Contact Inquiry — server is authoritative (DB insert + Telegram
+// alert + rate-limit). Direct client insert is a fallback ONLY when the
+// server is unreachable, so a single lead never lands twice in the DB.
 export const submitContactInquiry = async (data: ContactFormData) => {
   let backendResult = null;
   let supabaseResult = null;
 
-  // 1. Try Express API Endpoint
+  // 1. Express API Endpoint
   try {
     const response = await fetch('/api/contact', {
       method: 'POST',
@@ -229,30 +254,32 @@ export const submitContactInquiry = async (data: ContactFormData) => {
     console.warn('Express /api/contact endpoint warning:', err);
   }
 
-  // 2. Direct Supabase Client fallback / redundancy
-  const supabase = getSupabase();
-  if (supabase) {
-    try {
-      const { data: dbData, error } = await supabase
-        .from('messages')
-        .insert([{
-          name: data.name,
-          email: data.email,
-          phone: data.phone || null,
-          project_type: data.projectType || null,
-          budget: data.budget || null,
-          message: data.message,
-          status: 'unread'
-        }])
-        .select();
+  // 2. Direct Supabase client — fallback only when the server side didn't persist
+  if (!backendResult?.success) {
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        const { data: dbData, error } = await supabase
+          .from('messages')
+          .insert([{
+            name: data.name,
+            email: data.email,
+            phone: data.phone || null,
+            project_type: data.projectType || null,
+            budget: data.budget || null,
+            message: data.message,
+            status: 'unread'
+          }])
+          .select();
 
-      if (!error) {
-        supabaseResult = dbData?.[0];
-      } else {
-        console.error('Direct Supabase insert error:', error);
+        if (!error) {
+          supabaseResult = dbData?.[0];
+        } else {
+          console.error('Direct Supabase insert error:', error);
+        }
+      } catch (err) {
+        console.error('Supabase client exception:', err);
       }
-    } catch (err) {
-      console.error('Supabase client exception:', err);
     }
   }
 
@@ -264,7 +291,8 @@ export const submitContactInquiry = async (data: ContactFormData) => {
   };
 };
 
-// Submit Estimate Submission
+// Submit Estimate Submission — same rule as contact: server first, client
+// insert only as a fallback, never a duplicate.
 export const submitEstimateInquiry = async (data: EstimateFormData) => {
   let backendResult = null;
   let supabaseResult = null;
@@ -283,31 +311,33 @@ export const submitEstimateInquiry = async (data: EstimateFormData) => {
     console.warn('Express /api/estimates endpoint warning:', err);
   }
 
-  // 2. Supabase Client
-  const supabase = getSupabase();
-  if (supabase) {
-    try {
-      const { data: dbData, error } = await supabase
-        .from('estimates')
-        .insert([{
-          client_name: data.clientName,
-          client_email: data.clientEmail || (data.clientPhone ? `wa:${data.clientPhone}` : null),
-          client_phone: data.clientPhone || null,
-          service_type: data.serviceType,
-          deliverables: data.deliverables,
-          urgency: data.urgency,
-          estimated_price: data.estimatedPrice,
-          estimated_price_idr: data.estimatedPriceIdr || null,
-          notes: data.notes || null,
-          status: 'pending'
-        }])
-        .select();
+  // 2. Supabase Client — fallback only
+  if (!backendResult?.success) {
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        const { data: dbData, error } = await supabase
+          .from('estimates')
+          .insert([{
+            client_name: data.clientName,
+            client_email: data.clientEmail || (data.clientPhone ? `wa:${data.clientPhone}` : null),
+            client_phone: data.clientPhone || null,
+            service_type: data.serviceType,
+            deliverables: data.deliverables,
+            urgency: data.urgency,
+            estimated_price: data.estimatedPrice,
+            estimated_price_idr: data.estimatedPriceIdr || null,
+            notes: data.notes || null,
+            status: 'pending'
+          }])
+          .select();
 
-      if (!error) {
-        supabaseResult = dbData?.[0];
+        if (!error) {
+          supabaseResult = dbData?.[0];
+        }
+      } catch (err) {
+        console.error('Supabase estimate insert error:', err);
       }
-    } catch (err) {
-      console.error('Supabase estimate insert error:', err);
     }
   }
 
@@ -535,8 +565,14 @@ export const syncAllDataToSupabase = async (payload: {
       badge: pkg.badge || '',
       created_at: new Date().toISOString()
     }));
-    const { error } = await supabase.from('packages').upsert(pkgRows, { onConflict: 'id' });
-    if (error) errors.push(`packages: ${error.message}`);
+    const { error: pkgErr } = await supabase.from('packages').upsert(pkgRows, { onConflict: 'id' });
+    let packagesError: any = pkgErr;
+    if (pkgErr && pkgErr.message && pkgErr.message.includes('column')) {
+      const minimal = pkgRows.map(({ price_usd, recommended_for, period, updated_at, ...rest }: any) => rest);
+      const retry = await supabase.from('packages').upsert(minimal, { onConflict: 'id' });
+      packagesError = retry.error;
+    }
+    if (packagesError) errors.push(`packages: ${packagesError.message}`);
     else syncedTables.push(`Packages (${pkgRows.length} items)`);
   } catch (err: any) {
     errors.push(`packages: ${err.message}`);
@@ -699,32 +735,36 @@ export const fetchPackagesFromSupabase = async (): Promise<PricingPackage[] | nu
 };
 
 export const savePackageToSupabase = async (pkg: PricingPackage): Promise<boolean> => {
-  let saved = false;
   const supabase = getSupabase();
-  if (supabase) {
-    try {
-      const row = {
-        id: pkg.id,
-        title: pkg.name,
-        description: pkg.description || '',
-        price: pkg.priceIDR || '',
-        price_usd: pkg.priceUSD || 0,
-        timeline: pkg.deliveryTime || '',
-        features: pkg.features || [],
-        is_popular: pkg.popular ?? false,
-        badge: pkg.badge || '',
-        recommended_for: pkg.recommendedFor || '',
-        period: pkg.period || 'per project',
-        updated_at: new Date().toISOString()
-      };
-      const { error } = await supabase.from('packages').upsert(row, { onConflict: 'id' });
-      if (!error) saved = true;
-      else console.warn('Supabase save package error:', error.message);
-    } catch (err) {
-      console.warn('Supabase save package exception:', err);
+  if (!supabase) return false;
+  const row = {
+    id: pkg.id,
+    title: pkg.name,
+    description: pkg.description || '',
+    price: pkg.priceIDR || '',
+    price_usd: pkg.priceUSD || 0,
+    timeline: pkg.deliveryTime || '',
+    features: pkg.features || [],
+    is_popular: pkg.popular ?? false,
+    badge: pkg.badge || '',
+    recommended_for: pkg.recommendedFor || '',
+    period: pkg.period || 'per project',
+    updated_at: new Date().toISOString()
+  };
+  try {
+    const { error } = await supabase.from('packages').upsert(row, { onConflict: 'id' });
+    if (!error) return true;
+    // Pre-migration DB may lack price_usd / recommended_for / period / updated_at — degrade gracefully.
+    if (error.message && error.message.includes('column')) {
+      const minimal = { id: pkg.id, title: pkg.name, description: pkg.description || '', price: pkg.priceIDR || '', timeline: pkg.deliveryTime || '', features: pkg.features || [], is_popular: pkg.popular ?? false, badge: pkg.badge || '' };
+      const retry = await supabase.from('packages').upsert(minimal, { onConflict: 'id' });
+      return !retry.error;
     }
+    console.warn('Supabase save package error:', error.message);
+  } catch (err) {
+    console.warn('Supabase save package exception:', err);
   }
-  return saved;
+  return false;
 };
 
 export const deletePackageFromSupabase = async (id: string): Promise<boolean> => {
@@ -1051,7 +1091,13 @@ export const saveSkillsToSupabase = async (skills: SkillItem[]): Promise<boolean
       color: sk.color || 'amber',
       created_at: new Date().toISOString(),
     }));
-    const { error } = await supabase.from('skills').upsert(rows, { onConflict: 'id' });
+    let { error } = await supabase.from('skills').upsert(rows, { onConflict: 'id' });
+    // Pre-migration DB has no color column — drop it and retry.
+    if (error && error.message && error.message.includes('column')) {
+      const minimal = rows.map(({ color, ...rest }) => rest);
+      const retry = await supabase.from('skills').upsert(minimal, { onConflict: 'id' });
+      error = retry.error;
+    }
     if (error) {
       console.warn('saveSkillsToSupabase error:', error.message);
       return false;
@@ -1091,7 +1137,13 @@ export const savePackagesToSupabase = async (packages: PricingPackage[]): Promis
       period: pkg.period || 'per project',
       updated_at: new Date().toISOString(),
     }));
-    const { error } = await supabase.from('packages').upsert(rows, { onConflict: 'id' });
+    let { error } = await supabase.from('packages').upsert(rows, { onConflict: 'id' });
+    // Pre-migration DB: drop the newer columns and retry.
+    if (error && error.message && error.message.includes('column')) {
+      const minimal = rows.map(({ price_usd, recommended_for, period, updated_at, ...rest }) => rest);
+      const retry = await supabase.from('packages').upsert(minimal, { onConflict: 'id' });
+      error = retry.error;
+    }
     if (error) {
       console.warn('savePackagesToSupabase error:', error.message);
       return false;
@@ -1111,5 +1163,69 @@ export const savePackagesToSupabase = async (packages: PricingPackage[]): Promis
     console.warn('savePackagesToSupabase exception:', err);
     return false;
   }
+};
+
+// Auto-persist the full estimator config (services / scopes / timelines).
+export const saveEstimatorConfigToSupabase = async (cfg: {
+  services: EstimatorServiceOption[];
+  scopes: EstimatorScopeOption[];
+  timelines: EstimatorTimelineOption[];
+}): Promise<boolean> => {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  let allOk = true;
+  try {
+    const rows = cfg.services.map((s) => ({
+      id: s.id,
+      name: s.name || '',
+      base_usd: s.baseUsd ?? 0,
+      base_idr: s.baseIdrNum ?? 0,
+      icon: s.icon || 'Sparkles',
+      deliverables: s.deliverables || [],
+      created_at: new Date().toISOString(),
+    }));
+    const { error } = await supabase.from('estimator_services').upsert(rows, { onConflict: 'id' });
+    if (error) {
+      console.warn('saveEstimatorConfig services error:', error.message);
+      allOk = false;
+    }
+  } catch (err) {
+    console.warn('saveEstimatorConfig services exception:', err);
+    allOk = false;
+  }
+  try {
+    const rows = cfg.scopes.map((s) => ({
+      id: s.id,
+      label: s.label || '',
+      mult: s.mult ?? 1,
+      description: s.desc || '',
+      created_at: new Date().toISOString(),
+    }));
+    const { error } = await supabase.from('estimator_scopes').upsert(rows, { onConflict: 'id' });
+    if (error) {
+      console.warn('saveEstimatorConfig scopes error:', error.message);
+      allOk = false;
+    }
+  } catch (err) {
+    console.warn('saveEstimatorConfig scopes exception:', err);
+    allOk = false;
+  }
+  try {
+    const rows = cfg.timelines.map((t) => ({
+      id: t.id,
+      label: t.label || '',
+      mult: t.mult ?? 1,
+      created_at: new Date().toISOString(),
+    }));
+    const { error } = await supabase.from('estimator_timelines').upsert(rows, { onConflict: 'id' });
+    if (error) {
+      console.warn('saveEstimatorConfig timelines error:', error.message);
+      allOk = false;
+    }
+  } catch (err) {
+    console.warn('saveEstimatorConfig timelines exception:', err);
+    allOk = false;
+  }
+  return allOk;
 };
 

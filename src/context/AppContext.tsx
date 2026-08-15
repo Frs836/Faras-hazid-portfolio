@@ -54,6 +54,8 @@ import {
   saveExperiencesToSupabase,
   saveSkillsToSupabase,
   savePackagesToSupabase,
+  saveEstimatorConfigToSupabase,
+  saveSiteSettingsToSupabase,
   fetchPackagesFromSupabase,
   verifyAdminPin,
   fetchAdminMessages,
@@ -309,6 +311,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const loadedExpRef = useRef(false);
   const loadedSkillsRef = useRef(false);
   const loadedPackagesRef = useRef(false);
+  const loadedEstimatorRef = useRef(false);
+  const loadedSettingsRef = useRef(false);
 
   const [analytics, setAnalytics] = useState<AnalyticsData>(EMPTY_ANALYTICS);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
@@ -353,6 +357,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     fetchSiteSettingsFromSupabase().then((dbSettings) => {
       if (dbSettings) {
         setSiteSettings((prev) => ({ ...prev, ...dbSettings }));
+        loadedSettingsRef.current = true;
       }
     });
     // Load estimator config from Supabase so admin edits reach fresh visitors
@@ -361,6 +366,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setEstimatorServices(cfg.services);
         setEstimatorScopes(cfg.scopes);
         setEstimatorTimelines(cfg.timelines);
+        loadedEstimatorRef.current = true;
       }
     });
     // Experiences & skills propagation (admin edits reach visitors)
@@ -433,6 +439,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, 800);
     return () => clearTimeout(t);
   }, [packages]);
+
+  useEffect(() => {
+    if (!loadedEstimatorRef.current) return;
+    const t = setTimeout(() => {
+      saveEstimatorConfigToSupabase({
+        services: estimatorServices,
+        scopes: estimatorScopes,
+        timelines: estimatorTimelines,
+      }).catch(() => {});
+    }, 800);
+    return () => clearTimeout(t);
+  }, [estimatorServices, estimatorScopes, estimatorTimelines]);
+
+  useEffect(() => {
+    if (!loadedSettingsRef.current) return;
+    const t = setTimeout(() => {
+      saveSiteSettingsToSupabase(siteSettings).catch(() => {});
+    }, 800);
+    return () => clearTimeout(t);
+  }, [siteSettings]);
 
   useEffect(() => {
     localStorage.setItem('clayfolio_packages', JSON.stringify(packages));

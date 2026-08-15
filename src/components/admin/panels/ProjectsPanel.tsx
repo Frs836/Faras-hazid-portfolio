@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../../context/AppContext';
 import { Project } from '../../../types';
-import { saveProjectToSupabase, deleteProjectFromSupabase } from '../../../services/apiService';
+import { saveProjectToSupabase, deleteProjectFromSupabase, uploadAsset } from '../../../services/apiService';
 import { FolderPlus, Trash2, Edit, Plus, Save, UploadCloud, X } from 'lucide-react';
 
 interface Props {
@@ -13,14 +13,21 @@ export const ProjectsPanel: React.FC<Props> = ({ onNavigate }) => {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [deletingProject, setDeletingProject] = useState<Project | null>(null);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, callback: (url: string) => void) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, callback: (url: string) => void) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const cloudUrl = await uploadAsset(file);
+    if (cloudUrl) {
+      callback(cloudUrl);
+      addToast('File Diunggah!', `${file.name} diunggah ke cloud (Supabase Storage).`, 'success');
+      return;
+    }
+    // Fallback: embed locally when the storage endpoint is unavailable
     const reader = new FileReader();
     reader.onload = (event) => {
       if (event.target?.result) {
         callback(event.target.result as string);
-        addToast('File Diunggah!', `File ${file.name} berhasil dimuat.`, 'success');
+        addToast('File Diunggah!', `${file.name} dimuat (lokal).`, 'info');
       }
     };
     reader.readAsDataURL(file);
