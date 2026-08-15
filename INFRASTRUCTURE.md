@@ -84,3 +84,9 @@ Remaining phases:
   adds `packages.price_usd / recommended_for / period / updated_at`, `skills.color`,
   `site_settings.cv_download_url_indo / _eng`. The app works without it (fallback paths),
   but full-field persistence requires it.
+
+**Vercel gotcha (learned the hard way)**
+- Serverless functions only resolve imports that live INSIDE `api/`. A relative import
+  to `src/…` or any folder outside `api/` is NOT bundled → module-load crash → every
+  `/api/*` returns an empty 500. Keep all function code in `api/index.ts` (FarasBot is
+  inlined there). `api/diag.ts` was used to isolate this.
