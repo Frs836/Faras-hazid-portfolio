@@ -136,6 +136,45 @@ async function adminPinMatches(pin: string): Promise<boolean> {
   return pin === ADMIN_PIN;
 }
 
+// ------------------------------------------------------------------
+// LEAD NOTIFICATION — push a formatted alert to the admin's Telegram.
+// Free, gated on env; silently degrades when not configured.
+// ------------------------------------------------------------------
+const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+
+async function sendTelegram(text: string): Promise<void> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_ADMIN_CHAT_ID;
+  if (!token || !chatId) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
+    });
+  } catch (err: any) {
+    console.error('Telegram notification error:', err.message);
+  }
+}
+
+// ------------------------------------------------------------------
+// PUBLIC RATE LIMIT — curb spam on public write endpoints (30 req/min/IP)
+// ------------------------------------------------------------------
+const publicStore = new Map<string, { count: number; firstAt: number }>();
+
+function publicRateLimited(req: express.Request): boolean {
+  const ip = clientIp(req);
+  const now = Date.now();
+  const rec = publicStore.get(ip);
+  if (!rec || now - rec.firstAt > 60 * 1000) {
+    publicStore.set(ip, { count: 1, firstAt: now });
+    return false;
+  }
+  rec.count += 1;
+  publicStore.set(ip, rec);
+  return rec.count > 30;
+}
+
 // Helper to get server-side Supabase client
 function getServerSupabase() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -234,6 +273,9 @@ app.post('/api/contact', async (req, res) => {
   if (!name || !email || !message) {
     return res.status(400).json({ error: 'Name, email, and message are required.' });
   }
+  if (publicRateLimited(req)) {
+    return res.status(429).json({ error: 'Too many submissions. Try again later.' });
+  }
 
   const supabase = getServerSupabase();
   if (supabase) {
@@ -256,6 +298,15 @@ app.post('/api/contact', async (req, res) => {
         return res.status(500).json({ error: error.message, savedToSupabase: false });
       }
 
+      void sendTelegram(
+        `<b>🆕 Lead Baru — Kontak</b>\n` +
+        `👤 <b>${esc(name)}</b>\n` +
+        `📧 ${esc(email)}${phone ? `\n📞 ${esc(phone)}` : ''}\n` +
+        `🧩 Layanan: ${esc(projectType || '-')}\n` +
+        `💰 Budget: ${esc(budget || '-')}\n` +
+        `💬 ${esc(message).slice(0, 300) || '-'}`
+      );
+
       return res.json({ success: true, message: 'Inquiry saved to Supabase successfully.', data: data?.[0] });
     } catch (err: any) {
       console.error('Server error saving contact message:', err);
@@ -277,6 +328,9 @@ app.post('/api/estimates', async (req, res) => {
 
   if (!clientName || !serviceType || (!clientEmail && !clientPhone)) {
     return res.status(400).json({ error: 'Client name, service type, and a contact (email or phone) are required.' });
+  }
+  if (publicRateLimited(req)) {
+    return res.status(429).json({ error: 'Too many submissions. Try again later.' });
   }
 
   const supabase = getServerSupabase();
@@ -302,6 +356,17 @@ app.post('/api/estimates', async (req, res) => {
         console.error('Supabase estimate insert error:', error);
         return res.status(500).json({ error: error.message, savedToSupabase: false });
       }
+
+      void sendTelegram(
+        `<b>🆕 Lead Baru — Estimasi</b>\n` +
+        `👤 <b>${esc(clientName)}</b>\n` +
+        `📧 ${esc(clientEmail || clientPhone || '-')}\n` +
+        `🧩 Layanan: ${esc(serviceType)}\n` +
+        `⏱ Urgensi: ${esc(urgency || '-')}\n` +
+        `💵 Est. Harga: ${esc(estimatedPrice || 0)} USD${estimatedPriceIdr ? ` / ${esc(estimatedPriceIdr)} IDR` : ''}\n` +
+        `📦 Deliverables: ${(deliverables || []).length} item\n` +
+        `📝 ${esc(notes || '-').slice(0, 300)}`
+      );
 
       return res.json({ success: true, message: 'Estimate saved to Supabase successfully.', data: data?.[0] });
     } catch (err: any) {
@@ -532,6 +597,9 @@ app.post('/api/events', async (req, res) => {
   if (!EVENT_TYPES.includes(type)) {
     return res.status(400).json({ error: 'Unknown event type.' });
   }
+  if (publicRateLimited(req)) {
+    return res.status(429).json({ error: 'Too many requests.' });
+  }
   const country = (req.headers['x-vercel-ip-country'] as string) || null;
   const supabase = getServerSupabase();
   if (supabase) {
@@ -740,6 +808,13 @@ app.post('/api/translate', async (req, res) => {
     console.error('Translate error:', err);
     res.status(500).json({ error: err.message });
   }
+});
+
+// Global error handler — uncaught async errors become clean JSON 500s
+// (never leak stack traces to the client) and get logged server-side.
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('Unhandled route error:', err);
+  res.status(500).json({ error: 'Internal server error.' });
 });
 
 export default app;

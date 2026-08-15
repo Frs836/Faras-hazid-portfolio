@@ -1,0 +1,58 @@
+# INFRASTRUCTURE — Faras Hazid Portfolio
+
+Snapshot of the full-stack infrastructure, per-pillar status, known gaps,
+and the roadmap. Kept in-repo so it ships with the codebase and every change
+can be reviewed against it.
+
+Stack: React 19 + Vite (frontend) · Express on Vercel Serverless (`/api/*`) ·
+Supabase Postgres (DB + RLS) · Vercel (hosting/edge) · Git + GitHub (VCS).
+
+---
+
+## Pillar matrix
+
+| # | Pillar | Status | Notes / proof |
+|---|--------|--------|---------------|
+| 1 | Frontend | ✅ Done | React SPA, clean-path routing (`/about/`, no `#`), i18n (EN/ID/JA/AR), 404 trap, dashboard overlay. |
+| 2 | APIs & Backend Logic | ✅ Done | Express API in `api/index.ts` (`/api/health`, `/api/admin/*`, `/api/contact`, `/api/estimates`, `/api/projects`, `/api/messages`, `/api/estimates`, `/api/events`, `/api/analytics`, `/api/content`, `/api/faqs`, `/api/translate`). JSON error handler added. |
+| 3 | Database & Storage | ⚠️ Gap | Postgres ✅ + migrations via MCP. Image/CV uploads stored as data-URLs in DB/localStorage — **must move to object storage (Supabase Storage / S3)**. |
+| 4 | Auth & Permissions | ✅ Done | PIN server-verify + HMAC token (12h) + rate-limit. PIN rotatable in-app (scrypt in `admin_config`). RLS locked. Multi-admin (Supabase Auth) = roadmap. |
+| 5 | Hosting & Deployment | ✅ Done | Vercel static + serverless function. `vercel.json` rewrites (SPA fallback + `/api`). Server envs set in Vercel project. |
+| 6 | Cloud & Compute (optional) | ✅ Done | Supabase managed Postgres (Singapore region). Edge/CDN via Vercel. Edge Functions = roadmap (chatbot). |
+| 7 | CI/CD & Version Control | ⚠️ Gap | GitHub + auto-deploy on `main` push ✅. **No CI gate yet** — add GitHub Actions: `tsc --noEmit` + `vite build` on PRs. |
+| 8 | Security & RLS | ✅ Done | RLS: messages/estimates insert-only (anon), admin reads via service-role + HMAC. `admin_config` no public policies. Revoked anon EXECUTE on `rls_auto_enable()`. Supabase advisors = 0 lints. |
+| 9 | Rate Limiting | ✅ Done | Admin verify/change-pin: 5×/10min/IP (in-memory). Public writes (`/api/contact`, `/api/estimates`, `/api/events`): 30×/min/IP. **Note:** in-memory resets on cold start — acceptable at this scale; per-IP Redis = upgrade path. |
+| 10 | Caching & Scanning | ⚠️ Gap | No HTTP cache headers strategy; no dependency scanning. Add: static asset cache headers, GitHub Dependabot, optional Vercel WAF. |
+| 11 | Error Tracking & Logs | ⚠️ Gap | Server `console.error` + global JSON 500 handler ✅. **No crash reporting** — add Sentry (frontend + server) for prod visibility. |
+| 12 | Availability & Recovery | ⚠️ Gap | Supabase managed backups/PITR ✅. Redeploy = rollback path. No explicit RPO/RTO doc; smoke-test `/api/health` in CI. |
+
+Legend: ✅ shipped and working · ⚠️ shipped but needs follow-up · 🔜 roadmap
+
+---
+
+## Known gaps → action list (in priority order)
+
+1. **Object storage for uploads** — move image/PDF uploads from data-URLs to Supabase Storage buckets; keep signed URLs in DB. (Pillar 3)
+2. **CI gate (GitHub Actions)** — run `npm ci && npx tsc --noEmit && npm run build` on every PR; fail on error. (Pillar 7)
+3. **Sentry** — capture frontend + serverless errors; alert to Telegram. (Pillar 11)
+4. **Dependabot + static cache headers** — dependency alerts; `Cache-Control` on immutable assets. (Pillar 10)
+5. **Multi-admin (Supabase Auth)** — when more than one admin is needed; replaces single-PIN gate. (Pillar 4)
+
+## Roadmap — Telegram AI assistant ("FarasBot", OpenClaw-style but free)
+
+Deferred project — parked here so it is not lost. Goal: a Telegram chatbot that
+reaches into this same infrastructure.
+
+- **MVP**: Bot via BotFather; receives commands in chat; answers from this repo's
+  data (portfolio/projects/skills/pricing) using the existing `analytics_events`,
+  `projects`, `packages` tables + Gemini API (key already present).
+- **CRUD from PC**: bot commands → Express API (admin-token gated) → manage
+  projects/packages/content remotely from Telegram.
+- **Search & automation**: Supabase full-text search over portfolio content;
+  scheduled Edge Functions (cron) for reminders/reports.
+- **Google Drive / local PC**: later phase — OAuth flow (Google Picker/Drive API)
+  and a lightweight agent loop. Free-tier constraints: Vercel serverless has
+  request-time limits — long-running agent work needs Edge Functions or a cron
+  queue. Documented here; build AFTER portfolio is fully shipped.
+
+Milestone: reuse `TELEGRAM_BOT_TOKEN` already wired for lead notifications.

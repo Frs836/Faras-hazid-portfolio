@@ -119,6 +119,8 @@ export const SupabasePanel: React.FC = () => {
               <li><span className="text-blue-600 font-bold">GEMINI_API_KEY</span> = auto-translate</li>
               <li><span className="text-emerald-600 font-bold">ADMIN_PIN</span> = server-only (fallback first-run; ganti via Pengaturan → Keamanan Akun)</li>
               <li><span className="text-emerald-600 font-bold">ADMIN_SECRET</span> = server-only (HMAC token signing)</li>
+              <li><span className="text-violet-600 font-bold">TELEGRAM_BOT_TOKEN</span> = server-only (notif lead)</li>
+              <li><span className="text-violet-600 font-bold">TELEGRAM_ADMIN_CHAT_ID</span> = server-only (notif lead)</li>
             </ul>
           </div>
 
