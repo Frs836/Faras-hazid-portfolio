@@ -19,10 +19,10 @@ Supabase Postgres (DB + RLS) · Vercel (hosting/edge) · Git + GitHub (VCS).
 | 4 | Auth & Permissions | ✅ Done | PIN server-verify + HMAC token (12h) + rate-limit. PIN rotatable in-app (scrypt in `admin_config`). RLS locked. Multi-admin (Supabase Auth) = roadmap. |
 | 5 | Hosting & Deployment | ✅ Done | Vercel static + serverless function. `vercel.json` rewrites (SPA fallback + `/api`). Server envs set in Vercel project. |
 | 6 | Cloud & Compute (optional) | ✅ Done | Supabase managed Postgres (Singapore region). Edge/CDN via Vercel. Edge Functions = roadmap (chatbot). |
-| 7 | CI/CD & Version Control | ⚠️ Gap | GitHub + auto-deploy on `main` push ✅. **No CI gate yet** — add GitHub Actions: `tsc --noEmit` + `vite build` on PRs. |
+| 7 | CI/CD & Version Control | ✅ Done | GitHub + auto-deploy on `main` push ✅. **CI gate added** — `.github/workflows/ci.yml`: `npm ci` + `tsc --noEmit` + `vite build` on every push/PR. Dependabot weekly (`.github/dependabot.yml`). |
 | 8 | Security & RLS | ✅ Done | RLS: messages/estimates insert-only (anon), admin reads via service-role + HMAC. `admin_config` no public policies. Revoked anon EXECUTE on `rls_auto_enable()`. Supabase advisors = 0 lints. |
 | 9 | Rate Limiting | ✅ Done | Admin verify/change-pin: 5×/10min/IP (in-memory). Public writes (`/api/contact`, `/api/estimates`, `/api/events`): 30×/min/IP. **Note:** in-memory resets on cold start — acceptable at this scale; per-IP Redis = upgrade path. |
-| 10 | Caching & Scanning | ⚠️ Gap | No HTTP cache headers strategy; no dependency scanning. Add: static asset cache headers, GitHub Dependabot, optional Vercel WAF. |
+| 10 | Caching & Scanning | ✅ Done | Cache headers in `vercel.json`: `/assets/*` immutable 1y, `/index.html` no-cache. Dependabot enabled for npm weekly. Sentry crash-reporting still on roadmap. |
 | 11 | Error Tracking & Logs | ⚠️ Gap | Server `console.error` + global JSON 500 handler ✅. **No crash reporting** — add Sentry (frontend + server) for prod visibility. |
 | 12 | Availability & Recovery | ⚠️ Gap | Supabase managed backups/PITR ✅. Redeploy = rollback path. No explicit RPO/RTO doc; smoke-test `/api/health` in CI. |
 
@@ -33,10 +33,8 @@ Legend: ✅ shipped and working · ⚠️ shipped but needs follow-up · 🔜 ro
 ## Known gaps → action list (in priority order)
 
 1. **Object storage for uploads** — move image/PDF uploads from data-URLs to Supabase Storage buckets; keep signed URLs in DB. (Pillar 3)
-2. **CI gate (GitHub Actions)** — run `npm ci && npx tsc --noEmit && npm run build` on every PR; fail on error. (Pillar 7)
-3. **Sentry** — capture frontend + serverless errors; alert to Telegram. (Pillar 11)
-4. **Dependabot + static cache headers** — dependency alerts; `Cache-Control` on immutable assets. (Pillar 10)
-5. **Multi-admin (Supabase Auth)** — when more than one admin is needed; replaces single-PIN gate. (Pillar 4)
+2. **Sentry** — capture frontend + serverless errors; alert to Telegram. (Pillar 11)
+3. **Multi-admin (Supabase Auth)** — when more than one admin is needed; replaces single-PIN gate. (Pillar 4)
 
 ## Roadmap — Telegram AI assistant ("FarasBot", OpenClaw-style but free)
 
