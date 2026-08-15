@@ -113,6 +113,7 @@ export interface Translations {
     formTitle: string;
     nameLabel: string;
     emailLabel: string;
+    phoneLabel: string;
     serviceLabel: string;
     budgetLabel: string;
     messageLabel: string;
@@ -408,12 +409,13 @@ export const translations: Record<Language, Translations> = {
         },
       },
     },
-    contact: {
-      title: 'Let’s Create Something Iconic',
+contact: {
+      title: 'Let\'s Create Something Iconic',
       subtitle: 'Have a project in mind, a job opportunity, or need custom UI & graphic designs? Get in touch today.',
       formTitle: 'Send a Direct Message',
       nameLabel: 'Your Full Name',
       emailLabel: 'Your Email Address',
+      phoneLabel: 'WhatsApp Number (optional)',
       serviceLabel: 'Service You Need',
       budgetLabel: 'Estimated Budget',
       messageLabel: 'Project Details & Goals',
@@ -752,6 +754,7 @@ export const translations: Record<Language, Translations> = {
       formTitle: 'Kirim Pesan Langsung',
       nameLabel: 'Nama Lengkap Anda',
       emailLabel: 'Alamat Email',
+      phoneLabel: 'Nomor WhatsApp (opsional)',
       serviceLabel: 'Layanan yang Dibutuhkan',
       budgetLabel: 'Estimasi Anggaran',
       messageLabel: 'Rincian & Tujuan Proyek',
@@ -1090,6 +1093,7 @@ export const translations: Record<Language, Translations> = {
       formTitle: 'メッセージを送る',
       nameLabel: 'お名前',
       emailLabel: 'メールアドレス',
+      phoneLabel: 'WhatsApp番号（任意）',
       serviceLabel: 'ご希望のサービス',
       budgetLabel: '想定ご予算',
       messageLabel: 'プロジェクト詳細・目的',
@@ -1428,6 +1432,7 @@ export const translations: Record<Language, Translations> = {
       formTitle: 'إرسال رسالة مباشرة',
       nameLabel: 'الاسم الكامل',
       emailLabel: 'البريد الإلكتروني',
+      phoneLabel: 'رقم WhatsApp (اختياري)',
       serviceLabel: 'الخدمة المطلوبة',
       budgetLabel: 'الميزانية التقديرية',
       messageLabel: 'تفاصيل وأهداف المشروع',

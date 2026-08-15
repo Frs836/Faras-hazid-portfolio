@@ -13,16 +13,42 @@ export const ContactPage: React.FC = () => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    phone: '',
     serviceInterest: 'UI/UX & Mobile App Design',
-    budget: '$500 - $1,500',
+    budget: '1000000-2000000',
     message: '',
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
+  const [showCustomBudget, setShowCustomBudget] = useState(false);
+  const [customMin, setCustomMin] = useState('');
+  const [customMax, setCustomMax] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.name || !formData.email || !formData.message) {
+      addToast('Validation Error', 'Please fill in all required fields.', 'error');
+      return;
+    }
+
+    // Build budget string
+    let budgetStr = formData.budget;
+    if (formData.budget === '__custom__') {
+      const min = customMin ? `Rp ${Number(customMin).toLocaleString()}` : '';
+      const max = customMax ? ` – Rp ${Number(customMax).toLocaleString()}` : '+';
+      budgetStr = `Custom: ${min}${max}`;
+    } else {
+      // Parse the value like "1000000-2000000" to readable format
+      const parts = formData.budget.split('-');
+      if (parts.length === 2) {
+        const min = parts[0] === '100000000' ? 'Rp 100.000.000+' : `Rp ${Number(parts[0]).toLocaleString()} – Rp ${Number(parts[1]).toLocaleString()}`;
+        budgetStr = min;
+      } else if (parts[0] === '100000000') {
+        budgetStr = 'Rp 100.000.000+';
+      }
+    }
+
     if (!formData.name || !formData.email || !formData.message) {
       addToast('Validation Error', 'Please fill in all required fields.', 'error');
       return;
@@ -35,8 +61,9 @@ export const ContactPage: React.FC = () => {
       await submitContactInquiry({
         name: formData.name,
         email: formData.email,
+        phone: formData.phone,
         projectType: formData.serviceInterest,
-        budget: formData.budget,
+        budget: budgetStr,
         message: formData.message,
       });
       addToast('Pesan Terkirim!', 'Terima kasih! Pesan Anda telah berhasil disampaikan kepada Faras Hazid.', 'success');
@@ -44,7 +71,10 @@ export const ContactPage: React.FC = () => {
       addToast('Message Sent!', 'Thank you! Your message has been received.', 'success');
     } finally {
       setIsSubmitting(false);
-      setFormData({ name: '', email: '', serviceInterest: 'UI/UX & Mobile App Design', budget: '$500 - $1,500', message: '' });
+      setFormData({ name: '', email: '', phone: '', serviceInterest: 'UI/UX & Mobile App Design', budget: '1000000-2000000', message: '' });
+      setShowCustomBudget(false);
+      setCustomMin('');
+      setCustomMax('');
     }
   };
 
@@ -114,8 +144,8 @@ export const ContactPage: React.FC = () => {
           <div className="bg-paper p-6 sm:p-10 h-full">
             <span className="section-eyebrow block mb-6">01 — {t.contact.formTitle}</span>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+<form onSubmit={handleSubmit} className="space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
                 <div>
                   <label className="mono-label text-ink block mb-2">{t.contact.nameLabel} *</label>
                   <input
@@ -138,6 +168,16 @@ export const ContactPage: React.FC = () => {
                     className="field-input"
                   />
                 </div>
+                <div>
+                  <label className="mono-label text-ink block mb-2">{t.contact.phoneLabel}</label>
+                  <input
+                    type="tel"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="08xxxxxxxxxx"
+                    className="field-input"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -156,17 +196,55 @@ export const ContactPage: React.FC = () => {
                 </div>
                 <div>
                   <label className="mono-label text-ink block mb-2">{t.contact.budgetLabel}</label>
-                  <select
-                    value={formData.budget}
-                    onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
-                    className="field-input bg-paper"
-                  >
-                    <option>Rp 1.000.000 - Rp 3.000.000</option>
-                    <option>Rp 3.000.000 - Rp 7.000.000</option>
-                    <option>Rp 7.000.000 - Rp 15.000.000</option>
-                    <option>Rp 15.000.000+</option>
-                  </select>
-                </div>
+                   <select
+                     value={formData.budget}
+                     onChange={(e) => {
+                       const val = e.target.value;
+                       setFormData({ ...formData, budget: val });
+                       if (val === '__custom__') setShowCustomBudget(true);
+                       else setShowCustomBudget(false);
+                     }}
+                     className="field-input bg-paper"
+                   >
+                     <option value="500000-1000000">Rp 500.000 – Rp 1.000.000</option>
+                     <option value="1000000-2000000">Rp 1.000.000 – Rp 2.000.000</option>
+                     <option value="2000000-5000000">Rp 2.000.000 – Rp 5.000.000</option>
+                     <option value="5000000-10000000">Rp 5.000.000 – Rp 10.000.000</option>
+                     <option value="10000000-20000000">Rp 10.000.000 – Rp 20.000.000</option>
+                     <option value="20000000-50000000">Rp 20.000.000 – Rp 50.000.000</option>
+                     <option value="50000000-100000000">Rp 50.000.000 – Rp 100.000.000</option>
+                     <option value="100000000+">Rp 100.000.000+</option>
+                     <option value="__custom__">Custom range...</option>
+                   </select>
+                 </div>
+                 {showCustomBudget && (
+                   <div className="grid grid-cols-2 gap-3 mt-3">
+                     <div>
+                       <label className="mono-label text-ink block mb-1">Min (Rp)</label>
+                       <input
+                         type="number"
+                         min={0}
+                         step={100000}
+                         placeholder="Contoh: 3500000"
+                         value={customMin}
+                         onChange={(e) => setCustomMin(e.target.value)}
+                         className="field-input bg-paper"
+                       />
+                     </div>
+                     <div>
+                       <label className="mono-label text-ink block mb-1">Max (Rp, opsional)</label>
+                       <input
+                         type="number"
+                         min={0}
+                         step={100000}
+                         placeholder="Contoh: 7500000"
+                         value={customMax}
+                         onChange={(e) => setCustomMax(e.target.value)}
+                         className="field-input bg-paper"
+                       />
+                     </div>
+                   </div>
+                 )}
               </div>
 
               <div>
