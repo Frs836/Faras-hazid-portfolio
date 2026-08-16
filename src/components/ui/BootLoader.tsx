@@ -18,9 +18,9 @@ export const BootLoader: React.FC = () => {
     window.setTimeout(() => setPhase('gone'), 550);
   }, []);
 
-  // Auto-dismiss: earliest of (min 1.6s, window load +0.3s, hard 4.2s)
+  // Auto-dismiss: earliest of (min 2.5s, window load +0.3s, hard 4.2s)
   useEffect(() => {
-    const min = window.setTimeout(dismiss, 1600);
+    const min = window.setTimeout(dismiss, 2500);
     const force = window.setTimeout(dismiss, 4200);
     const onLoad = () => window.setTimeout(dismiss, 300);
     window.addEventListener('load', onLoad);
