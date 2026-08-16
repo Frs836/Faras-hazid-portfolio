@@ -3,6 +3,7 @@ import { AppProvider, useApp } from './context/AppContext';
 import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
 import { ToastContainer } from './components/ui/ToastContainer';
+import { BootLoader } from './components/ui/BootLoader';
 import { PrdSrsModal } from './components/modals/PrdSrsModal';
 
 import { HomePage } from './components/pages/HomePage';
@@ -37,6 +38,9 @@ const MainLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-paper text-ink font-sans relative overflow-x-clip">
+      {/* Brand boot splash (WebM logo) — dismisses itself */}
+      <BootLoader />
+
       {/* Film grain overlay */}
       <div className="grain" aria-hidden="true" />
 

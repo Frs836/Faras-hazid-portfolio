@@ -146,6 +146,9 @@ export interface Translations {
     loading: string;
     copied: string;
   };
+  boot: {
+    loading: string;
+  };
   dualBrand: {
     badge: string;
     title: string;
@@ -202,6 +205,7 @@ export interface Translations {
 
 export const translations: Record<Language, Translations> = {
   en: {
+  boot: { loading: 'Preparing the best experience…' },
     nav: {
       home: 'Home',
       about: 'About',
@@ -541,6 +545,7 @@ contact: {
     },
   },
   id: {
+  boot: { loading: 'Menyiapkan pengalaman terbaik…' },
     nav: {
       home: 'Beranda',
       about: 'Tentang',
@@ -880,6 +885,7 @@ contact: {
     },
   },
   ja: {
+  boot: { loading: '最高の体験を準備しています…' },
     nav: {
       home: 'ホーム',
       about: '概要',
@@ -1219,6 +1225,7 @@ contact: {
     },
   },
   ar: {
+  boot: { loading: 'نحضّر أفضل تجربة…' },
     nav: {
       home: 'الرئيسية',
       about: 'عني',
