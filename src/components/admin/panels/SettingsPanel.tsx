@@ -156,28 +156,13 @@ export const SettingsPanel: React.FC = () => {
         <div className="space-y-4">
           <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2 border-b pb-2">
             <User className="w-4 h-4 text-blue-600" />
-            <span>Header, Hero & Foto Profile</span>
+            <span>Foto Profile</span>
           </h3>
 
-          <div>
-            <label className="text-[11px] text-slate-600 block mb-1">Judul Utama / Hero Title</label>
-            <input type="text" value={siteSettings.heroTitle}
-              onChange={(e) => setSiteSettings((prev) => ({ ...prev, heroTitle: e.target.value }))}
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-slate-900" />
-          </div>
-
-          <div>
-            <label className="text-[11px] text-slate-600 block mb-1">Sub-Judul / Profesi Tagline</label>
-            <input type="text" value={siteSettings.heroSubtitle}
-              onChange={(e) => setSiteSettings((prev) => ({ ...prev, heroSubtitle: e.target.value }))}
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-slate-900" />
-          </div>
-
-          <div>
-            <label className="text-[11px] text-slate-600 block mb-1">Biografi Ringkas (About Bio)</label>
-            <textarea rows={3} value={siteSettings.aboutBio}
-              onChange={(e) => setSiteSettings((prev) => ({ ...prev, aboutBio: e.target.value }))}
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-slate-900 font-medium resize-none" />
+          <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200 text-[11px] font-medium text-slate-600 leading-relaxed">
+            Nama, role/tagline, dan bio sekarang diedit di <strong>Konten Halaman → Home / About</strong>
+            (field <code className="font-mono">hero.title</code>, <code className="font-mono">hero.role</code>, <code className="font-mono">hero.bio</code> —
+            tersedia multi-bahasa EN/ID/JA/AR). Bagian ini hanya menyimpan konfigurasi fungsional.
           </div>
 
           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">

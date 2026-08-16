@@ -7,7 +7,7 @@ import logoImg from '../../assets/images/focal_fh_logo.png';
 const LANG_ORDER: Language[] = ['en', 'id', 'ja', 'ar'];
 
 export const Navbar: React.FC = () => {
-  const { language, setLanguage, theme, toggleTheme, t, currentPage, setCurrentPage, isAdminUnlocked } = useApp();
+  const { language, setLanguage, theme, toggleTheme, t, currentPage, setCurrentPage, isAdminUnlocked, getContent } = useApp();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [clickCount, setClickCount] = useState(0);
@@ -27,11 +27,11 @@ export const Navbar: React.FC = () => {
   }, []);
 
   const pages: { id: PageView; label: string }[] = [
-    { id: 'home', label: t.nav.home },
-    { id: 'about', label: t.nav.about },
-    { id: 'portfolio', label: t.nav.portfolio },
-    { id: 'services', label: t.nav.services },
-    { id: 'contact', label: t.nav.contact },
+    { id: 'home', label: getContent('nav', 'labels.home', t.nav.home) },
+    { id: 'about', label: getContent('nav', 'labels.about', t.nav.about) },
+    { id: 'portfolio', label: getContent('nav', 'labels.portfolio', t.nav.portfolio) },
+    { id: 'services', label: getContent('nav', 'labels.services', t.nav.services) },
+    { id: 'contact', label: getContent('nav', 'labels.contact', t.nav.contact) },
   ];
 
   const handleLogoClick = () => {
@@ -148,7 +148,7 @@ export const Navbar: React.FC = () => {
               </div>
 
               <div>
-                <span className="section-eyebrow block mb-3">Language</span>
+                <span className="section-eyebrow block mb-3">{getContent('nav', 'labels.language', 'Language')}</span>
                 <div className={`flex gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
                   {LANG_ORDER.map((code) => (
                     <button

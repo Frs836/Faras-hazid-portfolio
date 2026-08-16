@@ -81,7 +81,7 @@ export const ServicesPage: React.FC = () => {
                   <p className="text-sm text-ink-muted leading-relaxed">{srv.description}</p>
                 </div>
                 <div className="pt-5 border-t hairline">
-                  <span className="section-eyebrow block mb-3">{t.services.deliverables}</span>
+                  <span className="section-eyebrow block mb-3">{getContent('services', 'labels.deliverables', t.services.deliverables)}</span>
                   <div className="flex flex-wrap gap-2">
                     {srv.deliverables.map((d) => (
                       <span key={d} className="mono-label text-ink border hairline px-2.5 py-1">
@@ -121,7 +121,7 @@ export const ServicesPage: React.FC = () => {
                 {pkg.popular && (
                   <span className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap mono-label bg-accent text-accent-ink px-3 py-1.5 flex items-center gap-1.5">
                     <Star className="w-3 h-3 fill-accent-ink" />
-                    {t.services.popularBadge}
+                    {getContent('services', 'labels.popular_badge', t.services.popularBadge)}
                   </span>
                 )}
 
@@ -158,7 +158,7 @@ export const ServicesPage: React.FC = () => {
 
                 <div className="space-y-4 pt-2">
                   <span className={`section-eyebrow block ${pkg.popular ? 'text-paper/50' : ''}`}>
-                    {t.services.includedFeaturesLabel}
+                    {getContent('services', 'labels.included_features', t.services.includedFeaturesLabel)}
                   </span>
                   <ul className="space-y-2.5">
                     {pkg.features.map((feat, fIdx) => (
@@ -172,7 +172,7 @@ export const ServicesPage: React.FC = () => {
                   <div className={`pt-4 border-t ${pkg.popular ? 'border-paper/20' : 'border-line'} space-y-3`}>
                     <div className={`mono-label flex items-center gap-1.5 ${pkg.popular ? 'text-paper/60' : 'text-ink-muted'}`}>
                       <Clock className="w-3.5 h-3.5" />
-                      {t.services.deliveryTimeLabel} {pkg.deliveryTime}
+                      {getContent('services', 'labels.delivery_label', t.services.deliveryTimeLabel)} {pkg.deliveryTime}
                     </div>
                     <button
                       onClick={() => handleOrderWhatsApp(pkg)}
@@ -183,7 +183,7 @@ export const ServicesPage: React.FC = () => {
                       }`}
                     >
                       <MessageCircle className="w-4 h-4" />
-                      {t.services.orderPackage}
+                      {getContent('services', 'labels.order_btn', t.services.orderPackage)}
                     </button>
                   </div>
                 </div>
@@ -223,13 +223,21 @@ export const ServicesPage: React.FC = () => {
         </ScrollReveal>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-line border hairline">
-          {t.services.whyChooseItems.map((item, i) => (
-            <div key={i} className="bg-paper p-6 sm:p-8 space-y-3">
-              <span className="mono-label text-ink-faint">0{i + 1}</span>
-              <h3 className="display-font text-lg font-semibold text-ink">{item.title}</h3>
-              <p className="text-sm text-ink-muted leading-relaxed">{item.desc}</p>
-            </div>
-          ))}
+          {Array.from({ length: 3 }, (_, i) => {
+            const fallback = t.services.whyChooseItems[i];
+            const n = i + 1;
+            return (
+              <div key={i} className="bg-paper p-6 sm:p-8 space-y-3">
+                <span className="mono-label text-ink-faint">0{n}</span>
+                <h3 className="display-font text-lg font-semibold text-ink">
+                  {getContent('services', `why.item_${n}_title`, fallback?.title || '')}
+                </h3>
+                <p className="text-sm text-ink-muted leading-relaxed">
+                  {getContent('services', `why.item_${n}_desc`, fallback?.desc || '')}
+                </p>
+              </div>
+            );
+          })}
         </div>
       </section>
 

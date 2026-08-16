@@ -3,7 +3,7 @@ import { ArrowUpRight } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 export const DualBrandBanner: React.FC = () => {
-  const { setCurrentPage, siteSettings, t } = useApp();
+  const { setCurrentPage, siteSettings, t, getContent } = useApp();
 
   const openCv = (lang: 'en' | 'id') => {
     const url = lang === 'en' ? siteSettings?.cvDownloadUrlEng : siteSettings?.cvDownloadUrlIndo;
@@ -22,14 +22,14 @@ export const DualBrandBanner: React.FC = () => {
         className="group bg-paper p-8 text-left transition-colors hover:bg-paper2"
       >
         <div className="flex items-center justify-between mb-8">
-          <span className="section-eyebrow">01 — Recruiters</span>
+          <span className="section-eyebrow">{getContent('dual', 'header.recruiters', '01 — Recruiters')}</span>
           <ArrowUpRight className="w-5 h-5 text-ink-faint group-hover:text-ink transition-colors" />
         </div>
-        <span className="mono-label text-ink-faint block mb-2">{t.dualBrand.corporateTag}</span>
+        <span className="mono-label text-ink-faint block mb-2">{getContent('dual', 'body.corporate_tag', t.dualBrand.corporateTag)}</span>
         <h3 className="display-font text-xl font-semibold text-ink group-hover:text-accent2 transition-colors">
-          {t.dualBrand.corporateBtn}
+          {getContent('dual', 'body.corporate_btn', t.dualBrand.corporateBtn)}
         </h3>
-        <p className="mt-4 text-sm text-ink-muted leading-relaxed max-w-sm">{t.dualBrand.description}</p>
+        <p className="mt-4 text-sm text-ink-muted leading-relaxed max-w-sm">{getContent('dual', 'body.description', t.dualBrand.description)}</p>
       </button>
 
       {/* Freelance / Studio */}
@@ -41,14 +41,14 @@ export const DualBrandBanner: React.FC = () => {
         className="group bg-paper p-8 text-left transition-colors hover:bg-paper2"
       >
         <div className="flex items-center justify-between mb-8">
-          <span className="section-eyebrow">02 — Clients</span>
+          <span className="section-eyebrow">{getContent('dual', 'header.clients', '02 — Clients')}</span>
           <ArrowUpRight className="w-5 h-5 text-ink-faint group-hover:text-ink transition-colors" />
         </div>
-        <span className="mono-label text-ink-faint block mb-2">{t.dualBrand.freelanceTag}</span>
+        <span className="mono-label text-ink-faint block mb-2">{getContent('dual', 'body.freelance_tag', t.dualBrand.freelanceTag)}</span>
         <h3 className="display-font text-xl font-semibold text-ink group-hover:text-accent2 transition-colors">
-          {t.dualBrand.freelanceBtn}
+          {getContent('dual', 'body.freelance_btn', t.dualBrand.freelanceBtn)}
         </h3>
-        <p className="mt-4 text-sm text-ink-muted leading-relaxed max-w-sm">{t.dualBrand.description}</p>
+        <p className="mt-4 text-sm text-ink-muted leading-relaxed max-w-sm">{getContent('dual', 'body.description', t.dualBrand.description)}</p>
       </button>
     </div>
   );

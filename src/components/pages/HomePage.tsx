@@ -18,8 +18,8 @@ export const HomePage: React.FC = () => {
     ? getContentList('home', 'marquee.words')
     : DEFAULT_MARQUEE;
 
-  const heroName = siteSettings?.heroTitle || 'FARAS HAZID';
-  const heroRole = siteSettings?.heroSubtitle || getContent('home', 'hero.role', t.about.bioRole);
+  const heroName = getContent('home', 'hero.title', siteSettings?.heroTitle || 'FARAS HAZID');
+  const heroRole = getContent('home', 'hero.role', siteSettings?.heroSubtitle || t.about.bioRole);
 
   const heroTitleLines = heroName.split('\n').filter(Boolean);
 
@@ -181,7 +181,7 @@ export const HomePage: React.FC = () => {
                     <p className="text-sm text-ink-muted line-clamp-2">{project.summary}</p>
                   </div>
                   <span className="mono-label text-ink-faint inline-flex items-center gap-1.5">
-                    {t.portfolio.viewCaseStudy}
+                    {getContent('home', 'featured.view_case', t.portfolio.viewCaseStudy)}
                     <ArrowUpRight className="w-3.5 h-3.5" />
                   </span>
                 </div>
@@ -202,11 +202,11 @@ export const HomePage: React.FC = () => {
       <section className="space-y-8">
         <ScrollReveal>
           <div className="border-b hairline pb-6 space-y-2">
-            <span className="section-eyebrow block">02 — Capabilities</span>
+            <span className="section-eyebrow block">{getContent('home', 'skills.eyebrow', '02 — Capabilities')}</span>
             <h2 className="display-font text-2xl sm:text-3xl font-bold tracking-tight text-ink">
-              {t.home.skillsTitle}
+              {getContent('home', 'skills.title', t.home.skillsTitle)}
             </h2>
-            <p className="text-sm text-ink-muted">{t.home.skillsSub}</p>
+            <p className="text-sm text-ink-muted">{getContent('home', 'skills.sub', t.home.skillsSub)}</p>
           </div>
         </ScrollReveal>
 
@@ -256,7 +256,7 @@ export const HomePage: React.FC = () => {
             <div className="absolute -top-24 -right-24 w-96 h-96 bg-accent2/20 rounded-full blur-3xl pointer-events-none" aria-hidden="true" />
             <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
               <div className="space-y-3 max-w-xl">
-                <span className="mono-label text-paper/60">03 — Pricing</span>
+                <span className="mono-label text-paper/60">{getContent('home', 'teaser.eyebrow', '03 — Pricing')}</span>
                 <h2 className="display-font text-3xl sm:text-4xl font-bold tracking-tight text-paper leading-tight">
                   {getContent('home', 'teaser.title', 'Get a transparent estimate in 30 seconds')}
                 </h2>

@@ -7,7 +7,7 @@ const idr = (n: number) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n);
 
 export const ProjectEstimator: React.FC = () => {
-  const { t, estimatorServices, estimatorScopes, estimatorTimelines, addToast, siteSettings } = useApp();
+  const { t, estimatorServices, estimatorScopes, estimatorTimelines, addToast, siteSettings, getContent } = useApp();
   const [selectedServiceId, setSelectedServiceId] = useState<string>(() => estimatorServices[0]?.id || 'brand-identity');
   const [selectedScopeId, setSelectedScopeId] = useState<string>(() => estimatorScopes[0]?.id || 'starter');
   const [selectedTimelineId, setSelectedTimelineId] = useState<string>(() => estimatorTimelines[0]?.id || 'standard');
@@ -93,22 +93,22 @@ export const ProjectEstimator: React.FC = () => {
             <div className="space-y-2">
               <span className="section-eyebrow inline-flex items-center gap-2">
                 <Sparkles className="w-3.5 h-3.5 text-strong" />
-                {t.calculator.badge}
+                {getContent('calc', 'badge.title', t.calculator.badge)}
               </span>
               <h3 className="display-font text-2xl sm:text-3xl font-bold tracking-tight text-ink">
-                {t.calculator.title}
+                {getContent('calc', 'labels.title', t.calculator.title)}
               </h3>
-              <p className="text-sm text-ink-muted">{t.calculator.subtitle}</p>
+              <p className="text-sm text-ink-muted">{getContent('calc', 'labels.subtitle', t.calculator.subtitle)}</p>
             </div>
             <div className="mono-label text-ink-faint shrink-0 flex items-center gap-2 border hairline px-3 py-2">
               <span className="w-2 h-2 rounded-full bg-strong" aria-hidden="true" />
-              {t.calculator.trustTitle}
+              {getContent('calc', 'labels.trust_title', t.calculator.trustTitle)}
             </div>
           </div>
 
           {/* Step 1 — service */}
           <div className="space-y-3">
-            <span className="section-eyebrow flex items-center gap-2"><StepTag n={1} />{t.calculator.step1}</span>
+            <span className="section-eyebrow flex items-center gap-2"><StepTag n={1} />{getContent('calc', 'labels.step1', t.calculator.step1)}</span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {localizedServices.map((srv) => {
                 const active = selectedServiceId === srv.id;
@@ -121,7 +121,7 @@ export const ProjectEstimator: React.FC = () => {
                   >
                     <div className="display-font font-semibold text-sm">{srv.name}</div>
                     <div className={`mono-label mt-1 ${active ? 'text-paper/60' : 'text-ink-faint'}`}>
-                      {t.calculator.startingFrom} ${srv.baseUsd} USD
+                      {getContent('calc', 'labels.starting_from', t.calculator.startingFrom)} ${srv.baseUsd} USD
                     </div>
                   </button>
                 );
@@ -131,7 +131,7 @@ export const ProjectEstimator: React.FC = () => {
 
           {/* Step 2 — scope */}
           <div className="space-y-3">
-            <span className="mono-label text-ink-muted flex items-center gap-2"><StepTag n={2} />{t.calculator.step2}</span>
+            <span className="mono-label text-ink-muted flex items-center gap-2"><StepTag n={2} />{getContent('calc', 'labels.step2', t.calculator.step2)}</span>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               {localizedScopes.map((scope) => {
                 const active = selectedScopeId === scope.id;
@@ -152,7 +152,7 @@ export const ProjectEstimator: React.FC = () => {
 
           {/* Step 3 — timeline */}
           <div className="space-y-3">
-            <span className="mono-label text-ink-muted flex items-center gap-2"><StepTag n={3} />{t.calculator.step3}</span>
+            <span className="mono-label text-ink-muted flex items-center gap-2"><StepTag n={3} />{getContent('calc', 'labels.step3', t.calculator.step3)}</span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {localizedTimelines.map((tm) => {
                 const active = selectedTimelineId === tm.id;
@@ -172,21 +172,21 @@ export const ProjectEstimator: React.FC = () => {
 
           {/* Step 4 — contact (optional but recommended) */}
           <div className="space-y-3">
-            <span className="mono-label text-ink-muted flex items-center gap-2"><StepTag n={4} />{t.calculator.step4}</span>
-            <p className="mono-label text-ink-faint">{t.calculator.contactHint}</p>
+            <span className="mono-label text-ink-muted flex items-center gap-2"><StepTag n={4} />{getContent('calc', 'labels.step4', t.calculator.step4)}</span>
+            <p className="mono-label text-ink-faint">{getContent('calc', 'labels.contact_hint', t.calculator.contactHint)}</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <input
                 type="text"
                 value={contactName}
                 onChange={(e) => setContactName(e.target.value)}
-                placeholder={t.calculator.contactNameLabel}
+                placeholder={getContent('calc', 'labels.contact_name', t.calculator.contactNameLabel)}
                 className="field-input"
               />
               <input
                 type="tel"
                 value={contactPhone}
                 onChange={(e) => setContactPhone(e.target.value)}
-                placeholder={t.calculator.contactPhoneLabel}
+                placeholder={getContent('calc', 'labels.contact_phone', t.calculator.contactPhoneLabel)}
                 className="field-input"
               />
             </div>
@@ -197,7 +197,7 @@ export const ProjectEstimator: React.FC = () => {
         <div className="lg:col-span-5 p-6 sm:p-8 bg-ink text-paper flex flex-col justify-between gap-6">
           <div className="space-y-5">
             <div className="flex items-center justify-between gap-3">
-              <span className="mono-label text-paper/50">{t.calculator.summaryBadge}</span>
+              <span className="mono-label text-paper/50">{getContent('calc', 'labels.summary_badge', t.calculator.summaryBadge)}</span>
               <span className="mono-label text-paper/50">{selectedScope.label}</span>
             </div>
             <h4 className="display-font text-xl font-semibold text-paper">{selectedService.name}</h4>
@@ -209,13 +209,13 @@ export const ProjectEstimator: React.FC = () => {
               </div>
               <div className="mono-label text-strong mt-1">{idr(estimateIdr)}</div>
               <div className="mono-label text-paper/50 mt-2">
-                {t.calculator.rangeLabel} ${estimateUsd} – ${highUsd}
+                {getContent('calc', 'labels.range_label', t.calculator.rangeLabel)} ${estimateUsd} – ${highUsd}
               </div>
-              <p className="mono-label text-paper/40 mt-3 border-t border-paper/15 pt-3">{t.calculator.quoteNote}</p>
+              <p className="mono-label text-paper/40 mt-3 border-t border-paper/15 pt-3">{getContent('calc', 'labels.quote_note', t.calculator.quoteNote)}</p>
             </div>
 
             <div className="space-y-2">
-              <span className="mono-label text-paper/50 block">{t.calculator.deliverablesHeader}</span>
+              <span className="mono-label text-paper/50 block">{getContent('calc', 'labels.deliverables_header', t.calculator.deliverablesHeader)}</span>
               <ul className="space-y-1.5 text-sm text-paper/85">
                 {selectedService.deliverables.map((d, idx) => (
                   <li key={idx} className="flex items-start gap-2">
@@ -234,7 +234,7 @@ export const ProjectEstimator: React.FC = () => {
             className="w-full py-4 bg-accent text-accent-ink font-bold text-sm inline-flex items-center justify-center gap-2 hover:brightness-105 transition disabled:opacity-50"
           >
             <MessageSquare className="w-4 h-4" />
-            <span>{saving ? 'Saving…' : t.calculator.sendWaBtn}</span>
+            <span>{saving ? 'Saving…' : getContent('calc', 'labels.send_wa_btn', t.calculator.sendWaBtn)}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>

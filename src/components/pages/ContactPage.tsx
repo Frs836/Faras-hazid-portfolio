@@ -149,12 +149,12 @@ export const ContactPage: React.FC = () => {
         {/* Form */}
         <ScrollReveal className="lg:col-span-7">
           <div className="bg-paper p-6 sm:p-10 h-full">
-            <span className="section-eyebrow block mb-6">01 — {t.contact.formTitle}</span>
+            <span className="section-eyebrow block mb-6">{getContent('contact', 'form.eyebrow', '01 — Send a Direct Message')}</span>
 
 <form onSubmit={handleSubmit} className="space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
                 <div>
-                  <label className="mono-label text-ink block mb-2">{t.contact.nameLabel} *</label>
+                  <label className="mono-label text-ink block mb-2">{getContent('contact', 'form.name', t.contact.nameLabel)} *</label>
                   <input
                     type="text"
                     required
@@ -165,7 +165,7 @@ export const ContactPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="mono-label text-ink block mb-2">{t.contact.emailLabel} *</label>
+                  <label className="mono-label text-ink block mb-2">{getContent('contact', 'form.email', t.contact.emailLabel)} *</label>
                   <input
                     type="email"
                     required
@@ -176,7 +176,7 @@ export const ContactPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="mono-label text-ink block mb-2">{t.contact.phoneLabel}</label>
+                  <label className="mono-label text-ink block mb-2">{getContent('contact', 'form.phone', t.contact.phoneLabel)}</label>
                   <input
                     type="tel"
                     value={formData.phone}
@@ -189,7 +189,7 @@ export const ContactPage: React.FC = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
-                  <label className="mono-label text-ink block mb-2">{t.contact.serviceLabel}</label>
+                  <label className="mono-label text-ink block mb-2">{getContent('contact', 'form.service', t.contact.serviceLabel)}</label>
                   <select
                     value={formData.serviceInterest}
                     onChange={(e) => setFormData({ ...formData, serviceInterest: e.target.value })}
@@ -202,7 +202,7 @@ export const ContactPage: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="mono-label text-ink block mb-2">{t.contact.budgetLabel}</label>
+                  <label className="mono-label text-ink block mb-2">{getContent('contact', 'form.budget', t.contact.budgetLabel)}</label>
                    <select
                      value={formData.budget}
                      onChange={(e) => {
@@ -255,7 +255,7 @@ export const ContactPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="mono-label text-ink block mb-2">{t.contact.messageLabel} *</label>
+                <label className="mono-label text-ink block mb-2">{getContent('contact', 'form.message', t.contact.messageLabel)} *</label>
                 <textarea
                   required
                   rows={5}
@@ -269,11 +269,11 @@ export const ContactPage: React.FC = () => {
               <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
                 <button type="submit" disabled={isSubmitting} className="btn-primary w-full sm:w-auto text-xs">
                   <Send className="w-4 h-4" />
-                  {isSubmitting ? 'Sending…' : t.contact.sendBtn}
+                  {isSubmitting ? 'Sending…' : getContent('contact', 'form.send', t.contact.sendBtn)}
                 </button>
                 <button type="button" onClick={handleSendWhatsApp} className="btn-ghost w-full sm:w-auto text-xs">
                   <MessageCircle className="w-4 h-4 text-strong" />
-                  {t.contact.sendWaBtn}
+                  {getContent('contact', 'form.send_wa', t.contact.sendWaBtn)}
                 </button>
               </div>
             </form>
@@ -284,7 +284,7 @@ export const ContactPage: React.FC = () => {
         <div className="lg:col-span-5 bg-paper border-l hairline">
           <div className="p-6 sm:p-10 h-full flex flex-col justify-between gap-10">
             <div className="space-y-8">
-              <span className="section-eyebrow block">02 — {t.contact.directContact}</span>
+              <span className="section-eyebrow block"><span className="section-eyebrow block">{getContent('contact', 'info.eyebrow_direct', '02 — Direct Contact')}</span></span>
               <ul className="space-y-6">
                 {infoItems.map((item) => (
                   <li key={item.label} className="flex items-start gap-4">
@@ -315,7 +315,7 @@ export const ContactPage: React.FC = () => {
             </div>
 
             <div className="space-y-5">
-              <span className="section-eyebrow block">{t.contact.socials}</span>
+              <span className="section-eyebrow block">{getContent('contact', 'info.eyebrow_socials', '03 � Socials')}</span>
               <div className="grid grid-cols-2 gap-px bg-line border hairline">
                 {socials.map((soc) => (
                   <a

@@ -9,8 +9,10 @@ interface ProfileCardProps {
 }
 
 export const ProfileCard: React.FC<ProfileCardProps> = ({ className = '', showBioText = false }) => {
-  const { t, siteSettings } = useApp();
+  const { t, siteSettings, getContent } = useApp();
   const avatarSrc = siteSettings?.avatarUrl || farasProfileImg;
+  const fullName = getContent('home', 'hero.title', siteSettings?.heroTitle || 'FARAS HAZID');
+  const roleTitle = getContent('home', 'hero.role', siteSettings?.heroSubtitle || 'GRAPHIC & UI DESIGNER');
   const phoneDisplay = siteSettings?.contactPhone || '+62 851-4354-1287';
   const emailDisplay = siteSettings?.contactEmail || 'focalhyperspacecreative@gmail.com';
   const waNumber = siteSettings?.whatsappNumber || '6285143541287';
@@ -28,18 +30,18 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ className = '', showBi
           />
         </div>
         <span className="absolute -bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap mono-label bg-ink text-paper px-3 py-1.5">
-          FARAS HAZID
+          {fullName}
         </span>
       </div>
 
       <div className="space-y-1.5">
-        <h3 className="display-font text-xl font-bold tracking-tight text-ink">FARAS HAZID</h3>
-        <p className="mono-label text-ink-muted">GRAPHIC &amp; UI DESIGNER</p>
+        <h3 className="display-font text-xl font-bold tracking-tight text-ink">{fullName}</h3>
+        <p className="mono-label text-ink-muted">{roleTitle}</p>
       </div>
 
       {showBioText && (
         <p className="text-sm text-ink-muted leading-relaxed max-w-md">
-          {siteSettings?.aboutBio || t.about.bioFull}
+          {getContent('about', 'hero.bio_full', siteSettings?.aboutBio || t.about.bioFull)}
         </p>
       )}
 

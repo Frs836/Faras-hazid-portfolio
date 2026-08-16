@@ -74,7 +74,7 @@ export const PortfolioPage: React.FC = () => {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t.portfolio.searchPlaceholder}
+                placeholder={getContent('portfolio', 'search.placeholder', t.portfolio.searchPlaceholder)}
                 className="field-input search-input"
               />
               {searchQuery && (
@@ -131,7 +131,7 @@ export const PortfolioPage: React.FC = () => {
                       )}
                     </div>
                     <span className="mono-label text-ink-faint inline-flex items-center gap-1">
-                      {t.portfolio.viewCaseStudy}
+                      {getContent('portfolio', 'labels.view_case', t.portfolio.viewCaseStudy)}
                       <ArrowUpRight className="w-3.5 h-3.5" />
                     </span>
                   </div>
@@ -197,9 +197,9 @@ export const PortfolioPage: React.FC = () => {
                 </h2>
                 <div className="grid grid-cols-3 gap-px bg-line border hairline">
                   {[
-                    { label: t.portfolio.client, value: selectedProject.client },
-                    { label: t.portfolio.year, value: selectedProject.year },
-                    { label: t.portfolio.role, value: selectedProject.role },
+                    { label: getContent('portfolio', 'labels.client', t.portfolio.client), value: selectedProject.client },
+                    { label: getContent('portfolio', 'labels.year', t.portfolio.year), value: selectedProject.year },
+                    { label: getContent('portfolio', 'labels.role', t.portfolio.role), value: selectedProject.role },
                   ].map((m) => (
                     <div key={m.label} className="bg-paper p-4">
                       <span className="section-eyebrow block mb-1">{m.label}</span>
@@ -211,13 +211,13 @@ export const PortfolioPage: React.FC = () => {
 
               {/* Problem */}
               <section className="space-y-3">
-                <span className="section-eyebrow block">01 — Problem</span>
+                <span className="section-eyebrow block">{getContent('portfolio', 'labels.problem', '01 — Problem')}</span>
                 <p className="text-base text-ink leading-relaxed">{selectedProject.problemStatement}</p>
               </section>
 
               {/* Workflow */}
               <section className="space-y-4">
-                <span className="section-eyebrow block">02 — Process</span>
+                <span className="section-eyebrow block">{getContent('portfolio', 'labels.workflow', '02 — Process')}</span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-line border hairline">
                   {selectedProject.workflowSteps.map((step, idx) => (
                     <div key={idx} className="bg-paper p-5 space-y-2">
@@ -230,14 +230,14 @@ export const PortfolioPage: React.FC = () => {
 
               {/* Solution */}
               <section className="space-y-3">
-                <span className="section-eyebrow block">03 — Solution</span>
+                <span className="section-eyebrow block">{getContent('portfolio', 'labels.solution', '03 — Solution')}</span>
                 <p className="text-base text-ink leading-relaxed">{selectedProject.solution}</p>
               </section>
 
               {/* Results */}
               {selectedProject.results.length > 0 && (
                 <section className="space-y-4">
-                  <span className="section-eyebrow block">04 — Results</span>
+                  <span className="section-eyebrow block">{getContent('portfolio', 'labels.results', '04 — Results')}</span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-line border hairline">
                     {selectedProject.results.map((res, idx) => (
                       <div key={idx} className="bg-paper p-4 flex items-center gap-3 text-sm text-ink">
@@ -251,7 +251,7 @@ export const PortfolioPage: React.FC = () => {
 
               {/* Tools */}
               <section className="space-y-3">
-                <span className="section-eyebrow block">Tools</span>
+                <span className="section-eyebrow block">{getContent('portfolio', 'labels.tools', 'Tools')}</span>
                 <div className="flex flex-wrap gap-2">
                   {selectedProject.tools.map((tool) => (
                     <span key={tool} className="mono-label text-ink border hairline px-3 py-1.5">
@@ -270,14 +270,14 @@ export const PortfolioPage: React.FC = () => {
                     rel="noreferrer"
                     className="btn-primary text-xs"
                   >
-                    {t.portfolio.viewCaseStudy}
+                    {getContent('portfolio', 'labels.view_case', t.portfolio.viewCaseStudy)}
                     <ArrowUpRight className="w-4 h-4" />
                   </a>
                 ) : (
                   <span className="mono-label text-ink-faint">Client asset — demo on request</span>
                 )}
                 <button onClick={() => setSelectedProject(null)} className="btn-ghost text-xs">
-                  {t.portfolio.close}
+                  {getContent('portfolio', 'labels.close', t.portfolio.close)}
                 </button>
               </div>
             </div>
