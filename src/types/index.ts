@@ -87,6 +87,15 @@ export interface SkillItem {
   color: string; // Tailwind hex or class color
 }
 
+export interface CertificateItem {
+  id: string;
+  title: string;
+  issuer: string;
+  year: string;
+  image: string;
+  description: string;
+}
+
 export interface FaqItem {
   id: string;
   category: string;

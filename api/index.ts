@@ -961,11 +961,14 @@ function mainMenu(chatId: number) {
     [
       { text: '📝 Konten', callback_data: 'cont:page:home' },
       { text: '❓ FAQ', callback_data: 'faq:list:0' },
-      { text: '⚙️ Pengaturan', callback_data: 'set:main' },
+      { text: '📜 Sertifikat', callback_data: 'cert:list:0' },
     ],
     [
+      { text: '⚙️ Pengaturan', callback_data: 'set:main' },
       { text: '💬 Leads', callback_data: 'lead:list' },
       { text: '📊 Stats', callback_data: 'stats' },
+    ],
+    [
       { text: '🔑 Ganti PIN', callback_data: 'pin:start' },
     ],
   ]));
@@ -1044,6 +1047,7 @@ export function registerBotRoutes(app: express.Express, deps: { getServerSupabas
     tools: 'Tools (pisah koma)', results: 'Hasil (pisah koma)', featured: 'featured (1/0)',
     priceUSD: 'Harga USD', priceIDR: 'Harga IDR', description: 'Deskripsi', deliveryTime: 'Waktu pengerjaan',
     recommendedFor: 'Rekomendasi untuk', period: 'Period', badge: 'Badge', popular: 'popular (1/0)', features: 'Fitur (pisah koma)',
+    issuer: 'Penerbit / Lembaga', image: 'URL gambar',
     name: 'Nama', icon: 'Icon', level: 'Proficiency (0-100)', category2: 'Kategori', company: 'Perusahaan', companyOrOrg: 'Perusahaan', period2: 'Periode', location: 'Lokasi', type: 'Tipe (work/education/leadership)',
     baseUsd: 'Harga dasar USD', baseIdrNum: 'Harga dasar IDR', label: 'Label', mult: 'Multiplier', desc2: 'Deskripsi', deliv: 'Deliverables (pisah koma)',
     email: 'Email', phone: 'Phone', wa: 'Nomor WhatsApp', avatarUrl: 'URL foto', cvIndo: 'URL CV Indonesia', cvEng: 'URL CV English',
@@ -1084,6 +1088,8 @@ export function registerBotRoutes(app: express.Express, deps: { getServerSupabas
         return showPackages(chatId);
       case '/skill':
         return showSkillList(chatId, 0);
+      case '/cert':
+        return showCertList(chatId, 0);
       case '/lead':
         return showLeads(chatId);
       case '/stats':
@@ -1349,6 +1355,31 @@ export function registerBotRoutes(app: express.Express, deps: { getServerSupabas
       if (b === 'del') {
         const ok = await removeRow('experiences', c);
         return send(chatId, ok ? '🗑 Pengalaman dihapus.' : '❌ Gagal hapus.');
+      }
+    }
+    if (a === 'cert') {
+      if (b === 'list') return showCertList(chatId, Number(c) || 0);
+      if (b === 'sel') return showCertDetail(chatId, c);
+      if (b === 'new') {
+        const id = 'cert-' + Date.now();
+        await upsert('certificates', { id, title: 'Sertifikat Baru', issuer: 'Penerbit', year: '', image: '', description: '', created_at: new Date().toISOString() });
+        return showCertDetail(chatId, id);
+      }
+      if (b === 'fld') {
+        setSession(chatId, { mode: 'fldint', data: { table: 'certificates', id: c, field: rest[0], label: `Sertifikat ${rest[0]}`, apply: (v: string) => {
+          const p: any = {};
+          if (rest[0] === 'title') p.title = v;
+          else if (rest[0] === 'issuer') p.issuer = v;
+          else if (rest[0] === 'year') p.year = v;
+          else if (rest[0] === 'image') p.image = v;
+          else if (rest[0] === 'description') p.description = v;
+          return p;
+        } } });
+        return send(chatId, `✏️ ${fieldPrompt[rest[0]] || rest[0]}\nKirim nilai baru${HINT}`);
+      }
+      if (b === 'del') {
+        const ok = await removeRow('certificates', c);
+        return send(chatId, ok ? '🗑 Sertifikat dihapus.' : '❌ Gagal hapus.');
       }
     }
     if (a === 'est') {
@@ -1634,6 +1665,38 @@ export function registerBotRoutes(app: express.Express, deps: { getServerSupabas
       [{ text: '✏️ Pertanyaan', callback_data: `faq:q:${f.id}` }, { text: '✏️ Jawaban', callback_data: `faq:a:${f.id}` }],
       [{ text: '🗑 Hapus', callback_data: `faq:del:${f.id}` }, { text: '⬅️ Kembali', callback_data: 'faq:list:0' }],
     ]));
+  }
+  async function showCertList(chatId: number, page = 0) {
+    const { rows } = await fetchAll('certificates', 'created_at');
+    if (!rows.length) return send(chatId, '📜 <b>Sertifikat</b>\nBelum ada.', kb([[{ text: '➕ Tambah', callback_data: 'cert:new' }, { text: '⬅️ Menu', callback_data: 'menu' }]]));
+    const r: any[][] = rows.slice(page * 6, page * 6 + 6).map((x) => [{ text: `📜 ${cap2(x.title, 30)} — ${esc(x.issuer || '')}`, callback_data: `cert:sel:${x.id}` }]);
+    const nav: any[] = [];
+    if (page > 0) nav.push({ text: '‹ Prev', callback_data: `cert:list:${page - 1}` });
+    if ((page + 1) * 6 < rows.length) nav.push({ text: 'Next ›', callback_data: `cert:list:${page + 1}` });
+    if (nav.length) r.push(nav);
+    r.push([{ text: '➕ Tambah', callback_data: 'cert:new' }, { text: '⬅️ Menu', callback_data: 'menu' }]);
+    return send(chatId, `📜 <b>Sertifikat (${rows.length})</b>`, kb(r));
+  }
+  async function showCertDetail(chatId: number, id: string) {
+    const { data: rows } = await db().from('certificates').select('*').eq('id', id).maybeSingle();
+    const x: any = rows;
+    if (!x) return send(chatId, 'Sertifikat tidak ditemukan.');
+    const kbRows: any[][] = [
+      [
+        { text: '✏️ Judul', callback_data: `cert:fld:${x.id}:title` },
+        { text: '✏️ Penerbit', callback_data: `cert:fld:${x.id}:issuer` },
+        { text: '✏️ Tahun', callback_data: `cert:fld:${x.id}:year` },
+      ],
+      [
+        { text: '🖼 Gambar', callback_data: `cert:fld:${x.id}:image` },
+        { text: '✏️ Desc', callback_data: `cert:fld:${x.id}:description` },
+      ],
+      [
+        { text: '🗑 Hapus', callback_data: `cert:del:${x.id}` },
+        { text: '⬅️ Kembali', callback_data: 'cert:list:0' },
+      ],
+    ];
+    await send(chatId, `📜 <b>${esc(x.title || '')}</b>\n${esc(x.issuer || '')}${x.year ? ' · ' + esc(x.year) : ''}\n${esc(cap2(x.description || ''))}\n${x.image ? '🖼 ' + cap2(x.image, 60) : ''}\nID: <code>${x.id}</code>`, kb(kbRows));
   }
   async function showLeads(chatId: number) {
     const { rows } = await fetchAll('messages', 'created_at');

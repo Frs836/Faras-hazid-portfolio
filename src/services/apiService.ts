@@ -3,6 +3,7 @@ import {
   Project, 
   PricingPackage, 
   ServiceOffering,
+  CertificateItem,
   EstimatorServiceOption, 
   EstimatorScopeOption, 
   EstimatorTimelineOption, 
@@ -515,6 +516,7 @@ export const syncAllDataToSupabase = async (payload: {
   experiences: ExperienceItem[];
   skills: SkillItem[];
   services?: ServiceOffering[];
+  certificates?: CertificateItem[];
   siteSettings?: SiteSettings;
 }): Promise<{ success: boolean; syncedTables: string[]; errors: string[] }> => {
   const syncedTables: string[] = [];
@@ -682,6 +684,26 @@ export const syncAllDataToSupabase = async (payload: {
       else syncedTables.push(`Services (${serviceRows.length} items)`);
     } catch (err: any) {
       errors.push(`services: ${err.message}`);
+    }
+  }
+
+  // 7c. Seed Certificates (About)
+  if (payload.certificates && payload.certificates.length > 0) {
+    try {
+      const certRows = payload.certificates.map((c) => ({
+        id: c.id,
+        title: c.title || '',
+        issuer: c.issuer || '',
+        year: c.year || '',
+        image: c.image || '',
+        description: c.description || '',
+        created_at: new Date().toISOString(),
+      }));
+      const { error } = await supabase.from('certificates').upsert(certRows, { onConflict: 'id' });
+      if (error) errors.push(`certificates: ${error.message}`);
+      else syncedTables.push(`Certificates (${certRows.length} items)`);
+    } catch (err: any) {
+      errors.push(`certificates: ${err.message}`);
     }
   }
 
@@ -1115,6 +1137,63 @@ export const saveServicesToSupabase = async (services: ServiceOffering[]): Promi
     return true;
   } catch (err: any) {
     console.warn('saveServicesToSupabase exception:', err);
+    return false;
+  }
+};
+
+// Learning certificates (About page)
+export const fetchCertificatesFromSupabase = async (): Promise<CertificateItem[] | null> => {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.from('certificates').select('*').order('created_at');
+    if (!error) {
+      return (data || []).map((x: any) => ({
+        id: x.id,
+        title: x.title,
+        issuer: x.issuer || '',
+        year: x.year || '',
+        image: x.image || '',
+        description: x.description || '',
+      }));
+    }
+  } catch (err) {
+    console.warn('Supabase fetch certificates exception:', err);
+  }
+  return null;
+};
+
+export const saveCertificatesToSupabase = async (certificates: CertificateItem[]): Promise<boolean> => {
+  const supabase = getSupabase();
+  if (!supabase || certificates.length === 0) return false;
+  try {
+    const rows = certificates.map((c) => ({
+      id: c.id,
+      title: c.title || '',
+      issuer: c.issuer || '',
+      year: c.year || '',
+      image: c.image || '',
+      description: c.description || '',
+      created_at: new Date().toISOString(),
+    }));
+    const { error } = await supabase.from('certificates').upsert(rows, { onConflict: 'id' });
+    if (error) {
+      console.warn('saveCertificatesToSupabase error:', error.message);
+      return false;
+    }
+    try {
+      const keep = rows.map((r) => r.id);
+      const { data: existing } = await supabase.from('certificates').select('id');
+      const stale = (existing || []).map((r: any) => r.id).filter((id: string) => !keep.includes(id));
+      if (stale.length > 0) {
+        await supabase.from('certificates').delete().in('id', stale);
+      }
+    } catch (reconErr) {
+      console.warn('saveCertificatesToSupabase reconcile error:', reconErr);
+    }
+    return true;
+  } catch (err: any) {
+    console.warn('saveCertificatesToSupabase exception:', err);
     return false;
   }
 };

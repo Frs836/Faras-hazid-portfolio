@@ -21,6 +21,7 @@ import {
   Database,
   Boxes,
   Info,
+  Award,
 } from 'lucide-react';
 import { PageContentEditor } from './PageContentEditor';
 import { FaqEditor } from './FaqEditor';
@@ -31,6 +32,7 @@ import { EstimatorPanel } from './panels/EstimatorPanel';
 import { ExperiencePanel } from './panels/ExperiencePanel';
 import { SkillsPanel } from './panels/SkillsPanel';
 import { ServicesPanel } from './panels/ServicesPanel';
+import { CertificatesPanel } from './panels/CertificatesPanel';
 import { MessagesPanel } from './panels/MessagesPanel';
 import { AnalyticsPanel } from './panels/AnalyticsPanel';
 import { SettingsPanel } from './panels/SettingsPanel';
@@ -38,7 +40,7 @@ import { SupabasePanel } from './panels/SupabasePanel';
 
 type GroupId = 'overview' | 'content' | 'portfolio' | 'estimator' | 'leads' | 'analytics' | 'settings';
 type ContentSub = 'home' | 'about' | 'portfolio' | 'services' | 'contact' | 'footer' | 'faq';
-type PortfolioSub = 'projects' | 'packages' | 'experiences' | 'skills' | 'services';
+type PortfolioSub = 'projects' | 'packages' | 'experiences' | 'skills' | 'services' | 'certificates';
 type SettingsSub = 'profile' | 'database';
 
 interface NavItem {
@@ -65,6 +67,7 @@ const PORTFOLIO_SUBS: { id: PortfolioSub; label: string; icon: typeof FolderOpen
   { id: 'experiences', label: 'Pengalaman', icon: Briefcase },
   { id: 'skills', label: 'Keahlian', icon: Wrench },
   { id: 'services', label: 'Layanan', icon: Layers },
+  { id: 'certificates', label: 'Sertifikat', icon: Award },
 ];
 
 const SETTINGS_SUBS: { id: SettingsSub; label: string; icon: typeof Settings }[] = [
@@ -137,6 +140,7 @@ export const AdminDashboard: React.FC = () => {
       if (portfolioSub === 'packages') return <PackagesPanel />;
       if (portfolioSub === 'experiences') return <ExperiencePanel />;
       if (portfolioSub === 'services') return <ServicesPanel />;
+      if (portfolioSub === 'certificates') return <CertificatesPanel />;
       return <SkillsPanel />;
     }
     if (group === 'estimator') return <EstimatorPanel />;

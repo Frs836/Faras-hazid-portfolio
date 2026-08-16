@@ -4,6 +4,7 @@ import {
   Project, 
   PricingPackage, 
   ServiceOffering, 
+  CertificateItem,
   ExperienceItem, 
   SkillItem, 
   FaqItem, 
@@ -55,6 +56,8 @@ import {
   saveSkillsToSupabase,
   fetchServicesFromSupabase,
   saveServicesToSupabase,
+  fetchCertificatesFromSupabase,
+  saveCertificatesToSupabase,
   savePackagesToSupabase,
   saveEstimatorConfigToSupabase,
   saveSiteSettingsToSupabase,
@@ -132,6 +135,9 @@ interface AppContextType {
 
   services: ServiceOffering[];
   setServices: React.Dispatch<React.SetStateAction<ServiceOffering[]>>;
+
+  certificates: CertificateItem[];
+  setCertificates: React.Dispatch<React.SetStateAction<CertificateItem[]>>;
 
   experiences: ExperienceItem[];
   setExperiences: React.Dispatch<React.SetStateAction<ExperienceItem[]>>;
@@ -245,6 +251,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : initialServices;
   });
 
+  const [certificates, setCertificates] = useState<CertificateItem[]>([]);
+
   const [experiences, setExperiences] = useState<ExperienceItem[]>(() => {
     const saved = localStorage.getItem('clayfolio_experiences');
     return saved ? JSON.parse(saved) : initialExperiences;
@@ -316,6 +324,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const loadedEstimatorRef = useRef(false);
   const loadedSettingsRef = useRef(false);
   const loadedServicesRef = useRef(false);
+  const loadedCertificatesRef = useRef(false);
 
   const [analytics, setAnalytics] = useState<AnalyticsData>(EMPTY_ANALYTICS);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
@@ -390,6 +399,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (list) {
         if (list.length > 0) setServices(list);
         loadedServicesRef.current = true;
+      }
+    });
+    // Learning certificates (About)
+    fetchCertificatesFromSupabase().then((list) => {
+      if (list) {
+        if (list.length > 0) setCertificates(list);
+        loadedCertificatesRef.current = true;
       }
     });
     // Packages propagation (admin edits reach visitors)
@@ -483,6 +499,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, 800);
     return () => clearTimeout(t);
   }, [services]);
+
+  // Certificates auto-persist
+  useEffect(() => {
+    if (!loadedCertificatesRef.current) return;
+    const t = setTimeout(() => {
+      saveCertificatesToSupabase(certificates).catch(() => {});
+    }, 800);
+    return () => clearTimeout(t);
+  }, [certificates]);
 
   useEffect(() => {
     localStorage.setItem('clayfolio_packages', JSON.stringify(packages));
@@ -730,6 +755,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setPackages,
         services: localizedServices,
         setServices,
+        certificates,
+        setCertificates,
         experiences: localizedExperiences,
         setExperiences,
         skills,

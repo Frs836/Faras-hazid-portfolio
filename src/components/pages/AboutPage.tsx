@@ -6,7 +6,7 @@ import { SkillProgressBar, AnimatedSkillBadge } from '../ui/SkillProgressBar';
 import { Download } from 'lucide-react';
 
 export const AboutPage: React.FC = () => {
-  const { t, experiences, skills, siteSettings, getContent, getContentList } = useApp();
+  const { t, experiences, skills, certificates, siteSettings, getContent, getContentList } = useApp();
 
   const workExps = experiences.filter((e) => e.type === 'work');
   const eduExps = experiences.filter((e) => e.type === 'education');
@@ -166,6 +166,56 @@ export const AboutPage: React.FC = () => {
             </ScrollReveal>
           ))}
         </div>
+      </section>
+
+      {/* Learning certificates */}
+      <section className="space-y-8">
+        <ScrollReveal>
+          <div className="border-b hairline pb-6 space-y-2">
+            <span className="section-eyebrow block">{getContent('about', 'cert.eyebrow', 'Certificates & Learning')}</span>
+            <h2 className="display-font text-2xl sm:text-3xl font-bold tracking-tight text-ink">
+              {getContent('about', 'cert.title', 'Learning Certificates')}
+            </h2>
+            <p className="text-sm text-ink-muted">{getContent('about', 'cert.sub', 'Certifications & training that shape the craft.')}</p>
+          </div>
+        </ScrollReveal>
+
+        {certificates.length === 0 ? (
+          <div className="border hairline bg-paper2 p-12 text-center mono-label text-ink-muted">
+            Belum ada sertifikat. Tambahkan lewat dashboard → Sertifikat.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {certificates.map((cert, idx) => (
+              <ScrollReveal key={cert.id} delay={Math.min(idx, 5) * 0.06}>
+                <div className="lift-card group bg-paper2 border hairline p-4 h-full flex flex-col gap-4 hover:bg-surface">
+                  {cert.image && (
+                    <div className="relative aspect-[4/3] overflow-hidden bg-paper">
+                      <img
+                        src={cert.image}
+                        alt={cert.title}
+                        loading="lazy"
+                        className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-[1.03] transition-all duration-500"
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <span className="mono-label text-ink-faint block">
+                      {cert.issuer}
+                      {cert.year ? ` · ${cert.year}` : ''}
+                    </span>
+                    <h3 className="display-font text-lg font-semibold text-ink group-hover:text-accent2 transition-colors">
+                      {cert.title}
+                    </h3>
+                    {cert.description && (
+                      <p className="text-sm text-ink-muted leading-relaxed">{cert.description}</p>
+                    )}
+                  </div>
+                </div>
+              </ScrollReveal>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Skills matrix */}

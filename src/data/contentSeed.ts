@@ -273,6 +273,10 @@ export const SITE_CONTENT_SEED: PageContentRow[] = [
   text('nav', 'labels', 'services', 'Services', 'Layanan', 'サービス', 'الخدمات'),
   text('nav', 'labels', 'contact', 'Contact', 'Kontak', 'お問い合わせ', 'تواصل'),
   text('nav', 'labels', 'language', 'Language', 'Bahasa', '言語', 'اللغة'),
+  // About — certificates section headers
+  text('about', 'cert', 'eyebrow', 'Certificates & Learning', 'Sertifikat & Pembelajaran', '受講証明書・学習', 'الشهادات والتعليم'),
+  text('about', 'cert', 'title', 'Learning Certificates', 'Sertifikat Pembelajaran', '学習証明書', 'الشهادات التعليمية'),
+  text('about', 'cert', 'sub', 'Certifications & training that shape the craft.', 'Sertifikasi & pelatihan yang membentuk keahlian.', 'スキルの基盤となる資格・研修。', 'شهادات وتدريب يُكوِّنان المهارة.'),
 ];
 
 export const FAQ_SEED: DbFaq[] = [
