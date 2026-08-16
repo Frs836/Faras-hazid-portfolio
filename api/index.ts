@@ -858,46 +858,21 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 });
 
 export default app;
-// ==============================
-// FARASBOT (inlined � Vercel bundles a single file; cross-folder imports are NOT bundled)
-// ==============================
-
 // ------------------------------------------------------------------
-// FARASBOT — Telegram admin assistant (private, webhook mode).
-// Full CRUD over the same Supabase tables the public site uses.
-// Registered from api/index.ts with injected dependencies (no circular imports).
+// FARASBOT 2.0 — Telegram admin assistant (private, webhook mode).
+// Full dashboard coverage: projects, packages, services, skills,
+// experience, estimator, page content, FAQ, leads, settings, PIN.
+// Inline keyboards instead of typing raw IDs (tap-to-select + steppers).
 // ------------------------------------------------------------------
-
-type Deps = {
-  getServerSupabase: () => any;
-  requireAdmin: (req: express.Request, res: express.Response, next: express.NextFunction) => void;
-  log: (...args: any[]) => void;
-};
-
-const BOT_TOKEN = () => process.env.TELEGRAM_BOT_TOKEN || '';
-const ALLOWED = () =>
-  (process.env.TELEGRAM_ALLOWED_CHAT_IDS || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-// In-memory step-session for guided /baru flows (resets on cold start —
-// acceptable for a single admin; re-type the command if it stalls).
-const sessions = new Map<string, { resource: string; field: string; id?: string; data: any }>();
-
-async function tgReq(method: string, payload: Record<string, any>) {
-  if (!BOT_TOKEN()) return null;
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN()}/${method}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const json = await res.json().catch(() => null);
-    return json;
-  } catch (err: any) {
-    return { ok: false, error: err.message };
-  }
+function tgReq(method: string, payload: Record<string, any>) {
+  if (!process.env.TELEGRAM_BOT_TOKEN) return Promise.resolve(null);
+  return fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+    .then((r) => r.json())
+    .catch((e) => ({ ok: false, error: e.message }));
 }
 
 const send = (chatId: number, text: string, extra: Record<string, any> = {}) =>
@@ -905,288 +880,820 @@ const send = (chatId: number, text: string, extra: Record<string, any> = {}) =>
 
 const kb = (rows: any[][]) => ({ inline_keyboard: rows });
 
-const cap = (s: string, n = 350) => (s.length > n ? s.slice(0, n) + '…' : s);
+const cap2 = (s: string, n = 300) => (s.length > n ? s.slice(0, n) + '…' : s);
 
-export function registerBotRoutes(app: express.Express, deps: Deps) {
-  const { getServerSupabase, requireAdmin, log } = deps;
-  // Telegram secret_token only allows [A-Za-z0-9_-]. Derive a hex-safe value
-  // from whatever is in env so base64/legacy values work unchanged.
-  const WEBHOOK_SECRET = () =>
-    crypto.createHash('sha256').update(process.env.BOT_WEBHOOK_SECRET || '').digest('hex');
+// Sessions: guided multistep flows + list pagination offsets.
+const sessions = new Map<string, { mode: string; data: any }>();
+const getSession = (id: number) => sessions.get(String(id));
+const setSession = (id: number, s: any) => sessions.set(String(id), s);
+const clearSession = (id: number) => sessions.delete(String(id));
 
-  const canUse = (chatId: number | undefined) =>
-    !!chatId && ALLOWED().includes(String(chatId));
+const BOT_ALLOWED = () =>
+  (process.env.TELEGRAM_ALLOWED_CHAT_IDS || '').split(',').map((s) => s.trim()).filter(Boolean);
+const canUse = (chatId: number | undefined) => !!chatId && BOT_ALLOWED().includes(String(chatId));
 
-  // ---- data helpers (service role, straight from the same tables) ----
-  const db = () => getServerSupabase();
+const WEBHOOK_SECRET2 = () =>
+  crypto.createHash('sha256').update(process.env.BOT_WEBHOOK_SECRET || '').digest('hex');
 
-  async function listProjects() {
-    const { data } = await db().from('projects').select('*').order('created_at', { ascending: false });
-    return data || [];
-  }
-  async function listPackages() {
-    const { data } = await db().from('packages').select('*').order('created_at');
-    return data || [];
-  }
-  async function listLeads(unreadOnly = true) {
-    let q = db().from('messages').select('*').order('created_at', { ascending: false });
-    if (unreadOnly) q = q.eq('status', 'unread');
-    const { data } = await q;
-    return data || [];
-  }
+// ---- data helpers (service role, same tables as the site) ----
+const db = () => getServerSupabase();
+async function fetchAll(table: string, order: string) {
+  const { data, error } = await db().from(table).select('*').order(order);
+  return { rows: data || [], error };
+}
+async function upsert(table: string, row: Record<string, any>) {
+  const { error } = await db().from(table).upsert(row, { onConflict: 'id' });
+  return !error;
+}
+async function removeRow(table: string, id: string) {
+  const { error } = await db().from(table).delete().eq('id', id);
+  return !error;
+}
+async function patchRow(table: string, id: string, patch: Record<string, any>) {
+  const { error } = await db().from(table).update(patch).eq('id', id);
+  return !error;
+}
 
-  // ---- rendering ----
-  const projectLine = (p: any) =>
-    `${p.featured ? '⭐ ' : ''}<b>${esc(p.title)}</b> [${esc(p.category || '-')}] — ${esc(p.year || '-')}\nID: <code>${p.id}</code>`;
+const PROJECT_FIELDS: Record<string, (p: any, v: string) => void> = {
+  title: (p, v) => (p.title = v),
+  subtitle: (p, v) => (p.subtitle = v),
+  category: (p, v) => (p.category = v),
+  client: (p, v) => (p.client = v),
+  year: (p, v) => (p.year = v),
+  role: (p, v) => (p.role = v),
+  liveUrl: (p, v) => (p.live_url = v),
+  thumbnail: (p, v) => (p.thumbnail = v),
+  summary: (p, v) => (p.summary = v),
+  solution: (p, v) => (p.solution = v),
+  problemStatement: (p, v) => (p.problem_statement = v),
+  tools: (p, v) => (p.tools = v.split(',').map((x) => x.trim())),
+  results: (p, v) => (p.results = v.split(',').map((x) => x.trim())),
+  featured: (p, v) => (p.featured = ['1', 'true', 'yes', 'ya'].includes(v.toLowerCase())),
+};
 
-  const packageLine = (pkg: any) =>
-    `<b>${esc(pkg.title)}</b> — ${pkg.price_usd ? `$${pkg.price_usd}` : ''} ${pkg.price ? esc(pkg.price) : ''}\nID: <code>${pkg.id}</code>`;
+const PACKAGE_FIELDS: Record<string, (p: any, v: string) => void> = {
+  title: (p, v) => (p.title = v),
+  name: (p, v) => (p.title = v),
+  description: (p, v) => (p.description = v),
+  priceUSD: (p, v) => (p.price_usd = Number(v) || 0),
+  priceIDR: (p, v) => (p.price = v),
+  deliveryTime: (p, v) => (p.timeline = v),
+  recommendedFor: (p, v) => (p.recommended_for = v),
+  period: (p, v) => (p.period = v),
+  badge: (p, v) => (p.badge = v),
+  popular: (p, v) => (p.is_popular = ['1', 'true', 'yes', 'ya'].includes(v.toLowerCase())),
+  features: (p, v) => (p.features = v.split(',').map((x) => x.trim())),
+};
 
-  async function renderMenu(chatId: number) {
-    const k = kb([
-      [
-        { text: '📁 Proyek', callback_data: 'menu:projects' },
-        { text: '🎁 Paket', callback_data: 'menu:packages' },
-      ],
-      [
-        { text: '💬 Leads', callback_data: 'menu:leads' },
-        { text: '📊 Stats', callback_data: 'menu:stats' },
-      ],
-      [
-        { text: '🎨 Skill', callback_data: 'menu:skills' },
-        { text: '❓ FAQ', callback_data: 'menu:faqs' },
-        { text: '📞 Kontak', callback_data: 'menu:contact' },
-      ],
-    ]);
-    await send(chatId, 'FarasBot — Admin Panel Kilat.\n\nPilih menu di bawah, atau ketik /help buat daftar command.', k);
-  }
+// ---------- renderers / menus ----------
+function mainMenu(chatId: number) {
+  return send(chatId, '🤖 <b>FarasBot 2.0 — Panel Admin</b>\nPilih modul atau ketik /help.', kb([
+    [
+      { text: '📁 Proyek', callback_data: 'proj:list:0' },
+      { text: '🎁 Paket', callback_data: 'pkg:list:0' },
+      { text: '✨ Layanan', callback_data: 'svc:list:0' },
+    ],
+    [
+      { text: '🎨 Skill', callback_data: 'sk:list:0' },
+      { text: '📄 Pengalaman', callback_data: 'xp:list:0' },
+      { text: '🧮 Estimator', callback_data: 'est:main' },
+    ],
+    [
+      { text: '📝 Konten', callback_data: 'cont:page:home' },
+      { text: '❓ FAQ', callback_data: 'faq:list:0' },
+      { text: '⚙️ Pengaturan', callback_data: 'set:main' },
+    ],
+    [
+      { text: '💬 Leads', callback_data: 'lead:list' },
+      { text: '📊 Stats', callback_data: 'stats' },
+      { text: '🔑 Ganti PIN', callback_data: 'pin:start' },
+    ],
+  ]));
+}
 
-  async function showProjects(chatId: number) {
-    const projects = await listProjects();
-    if (!projects.length) return send(chatId, 'Belum ada proyek.');
-    const k = kb(projects.slice(0, 6).map((p) => [{ text: `📁 ${p.title}`, callback_data: `proj:${p.id}` }]));
-    await send(chatId, `📁 <b>Proyek (${projects.length})</b>\n\n${projects.map(projectLine).join('\n\n')}`, k);
-  }
+async function projectRows() {
+  const { rows } = await fetchAll('projects', 'created_at');
+  return rows;
+}
+async function packageRows() {
+  const { rows } = await fetchAll('packages', 'created_at');
+  return rows;
+}
 
-  async function showPackages(chatId: number) {
-    const pkgs = await listPackages();
-    if (!pkgs.length) return send(chatId, 'Belum ada paket.');
-    await send(chatId, `🎁 <b>Paket (${pkgs.length})</b>\n\n${pkgs.map(packageLine).join('\n\n')}\n\n<code>/paket baru</code> buat tambah.`);
-  }
+async function genericList(chatId: number, title: string, items: any[], cbPrefix: string, idKey: string, label: (x: any, i: number) => string, page: number, pageSz = 8, footerRows: any[][] = []) {
+  if (!items.length) return send(chatId, `${title}\n\nBelum ada data.`);
+  const pages = Math.ceil(items.length / pageSz);
+  const p = Math.min(Math.max(page, 0), pages - 1);
+  const slice = items.slice(p * pageSz, p * pageSz + pageSz);
+  const nav: any = [];
+  const navRow: any[] = [];
+  if (p > 0) navRow.push({ text: '‹ Prev', callback_data: `${cbPrefix}:${p - 1}` });
+  navRow.push({ text: `${p + 1}/${pages}`, callback_data: 'noop' });
+  if (p < pages - 1) navRow.push({ text: 'Next ›', callback_data: `${cbPrefix}:${p + 1}` });
+  if (navRow.length) nav.push(navRow);
+  const rows: any[][] = slice.map((x, i) => [{ text: `${'•'} ${cap2(label(x, p * pageSz + i), 28)}`, callback_data: `${cbPrefix.replace(/:list:\d+$/, '')}:sel:${x[idKey]}` }]);
+  return send(chatId, title, kb([...rows, ...nav, ...footerRows]));
+}
 
-  async function showLeads(chatId: number) {
-    const leads = await listLeads(true);
-    if (!leads.length) return send(chatId, 'Tidak ada lead baru. 🎉');
-    await send(
-      chatId,
-      `💬 <b>Lead belum dibaca (${leads.length})</b>\n\n` +
-        leads
-          .slice(0, 8)
-          .map(
-            (m: any) =>
-              `<b>${esc(m.name)}</b> (${esc(m.email || '-')}${m.phone ? ` / ${esc(m.phone)}` : ''})\n` +
-              `Layanan: ${esc(m.project_type || '-')} · Budget: ${esc(m.budget || '-')}\n` +
-              `ID: <code>${m.id}</code>`
-          )
-          .join('\n\n'),
-      kb(leads.slice(0, 6).map((m: any) => [{ text: `✓ Tandai baca ${esc(m.name)}`, callback_data: `leadread:${m.id}` }]))
-    );
-  }
+async function showProjects(chatId: number, page = 0) {
+  const items = await projectRows();
+  const k = kb(items.slice(page * 6, page * 6 + 6).map((p) => [{ text: `📁 ${cap2(p.title, 28)}`, callback_data: `proj:sel:${p.id}` }]));
+  const nav: any[] = [];
+  if (page > 0) nav.push({ text: '‹ Prev', callback_data: `proj:list:${page - 1}` });
+  if ((page + 1) * 6 < items.length) nav.push({ text: 'Next ›', callback_data: `proj:list:${page + 1}` });
+  const rows: any[][] = [...items.slice(page * 6, page * 6 + 6).map((p) => [{ text: `📁 ${cap2(p.title, 28)}`, callback_data: `proj:sel:${p.id}` }])];
+  if (nav.length) rows.push(nav);
+  rows.push([{ text: '➕ Buat baru', callback_data: 'proj:new' }, { text: '⬅️ Menu', callback_data: 'menu' }]);
+  if (!items.length) return send(chatId, '📁 <b>Proyek</b>\nBelum ada proyek.', kb([[{ text: '➕ Buat baru', callback_data: 'proj:new' }, { text: '⬅️ Menu', callback_data: 'menu' }]]));
+  return send(chatId, `📁 <b>Proyek (${items.length})</b>`, kb(rows));
+}
 
-  async function showStats(chatId: number) {
-    const [projects, leads] = await Promise.all([listProjects(), listLeads(false)]);
-    const unread = leads.filter((l: any) => l.status !== 'read').length;
-    await send(
-      chatId,
-      `📊 <b>Statistik</b>\n` +
-        `• Proyek: ${projects.length}\n` +
-        `• Lead total: ${leads.length} (${unread} belum dibaca)\n` +
-        `• Paket: ${(await listPackages()).length}\n\n` +
-        `Data langsung dari database yang sama dengan situs.`
-    );
-  }
+async function showProjectDetail(chatId: number, id: string) {
+  const { data: rows } = await db().from('projects').select('*').eq('id', id).maybeSingle();
+  const p = rows;
+  if (!p) return send(chatId, 'Proyek tidak ditemukan.');
+  await send(chatId, `<b>${esc(p.title)}</b> [${esc(p.category || '-')}] ${p.featured ? '⭐' : ''}\n${esc(p.client || '-')} · ${esc(p.year || '-')}\n${esc(cap2(p.summary || '-'))}\nID: <code>${p.id}</code>\n\n<code>/proyek tulis ${p.id} &lt;field&gt;=&lt;nilai&gt;</code> juga bisa langsung.`, kb([
+    [
+      { text: '✏️ Judul', callback_data: `proj:fld:${p.id}:title` },
+      { text: '✏️ Sub', callback_data: `proj:fld:${p.id}:subtitle` },
+      { text: '✏️ Kategori', callback_data: `proj:fld:${p.id}:category` },
+    ],
+    [
+      { text: '✏️ Client', callback_data: `proj:fld:${p.id}:client` },
+      { text: '✏️ Tahun', callback_data: `proj:fld:${p.id}:year` },
+      { text: '✏️ Ringkas', callback_data: `proj:fld:${p.id}:summary` },
+    ],
+    [
+      { text: '✏️ Solusi', callback_data: `proj:fld:${p.id}:solution` },
+      { text: '✏️ Tools (csv)', callback_data: `proj:fld:${p.id}:tools` },
+      { text: '📎 Thumb', callback_data: `proj:fld:${p.id}:thumbnail` },
+    ],
+    [
+      { text: '🗑 Hapus', callback_data: `proj:del:${p.id}` },
+      { text: '⬅️ Kembali', callback_data: 'proj:list:0' },
+    ],
+  ]));
+}
 
-  async function showSkills(chatId: number) {
-    const { data } = await db().from('skills').select('*').order('created_at');
-    const skills = data || [];
-    if (!skills.length) return send(chatId, 'Belum ada skill.');
-    await send(chatId, `🎨 <b>Keahlian (${skills.length})</b>\n\n` + skills.map((s: any) => `• ${esc(s.name)} — ${s.level ?? 90}%`).join('\n'));
-  }
-
-  async function showFaqs(chatId: number) {
-    const { data } = await db().from('faqs').select('*').order('sort');
-    const faqs = data || [];
-    if (!faqs.length) return send(chatId, 'Belum ada FAQ.');
-    await send(chatId, faqs.map((f: any) => `<b>Q: ${esc(f.question?.en || '-')}</b>\n${esc(cap(f.answer?.en || ''))}`).join('\n\n'));
-  }
-
-  async function showContact(chatId: number) {
-    const { data } = await db().from('site_settings').select('*').eq('id', 'default').maybeSingle();
-    const s = data || {};
-    await send(chatId, `📞 <b>Kontak</b>\nEmail: ${esc(s.contact_email || '-')}\nWA: ${esc(s.whatsapp_number || '-')}`);
-  }
-
-  // ---- CRUD: project / package ----
-  const PROJECT_FIELDS: Record<string, (a: any, v: string) => void> = {
-    title: (a, v) => (a.title = v),
-    subtitle: (a, v) => (a.subtitle = v),
-    category: (a, v) => (a.category = v),
-    client: (a, v) => (a.client = v),
-    year: (a, v) => (a.year = v),
-    role: (a, v) => (a.role = v),
-    liveUrl: (a, v) => (a.live_url = v),
-    thumbnail: (a, v) => (a.thumbnail = v),
-    summary: (a, v) => (a.summary = v),
-    solution: (a, v) => (a.solution = v),
-    problemStatement: (a, v) => (a.problem_statement = v),
-    tools: (a, v) => (a.tools = v.split(',').map((x) => x.trim())),
-    results: (a, v) => (a.results = v.split(',').map((x) => x.trim())),
-    featured: (a, v) => (a.featured = ['1', 'true', 'yes', 'ya'].includes(v.toLowerCase())),
+export function registerBotRoutes(app: express.Express, deps: { getServerSupabase: () => any; requireAdmin: (a: any, b: any, c: any) => void; log: (...a: any[]) => void }) {
+  const { log } = deps;
+  const HINT = '\n\nKirim teks nilai barunya, atau <code>/batal</code> untuk keluar.';
+  const fieldPrompt: Record<string, string> = {
+    title: 'Judul', subtitle: 'Sub-judul', category: 'Kategori', client: 'Client', year: 'Tahun', role: 'Role',
+    liveUrl: 'Link demo', thumbnail: 'URL thumbnail', summary: 'Ringkasan', solution: 'Solusi', problemStatement: 'Problem',
+    tools: 'Tools (pisah koma)', results: 'Hasil (pisah koma)', featured: 'featured (1/0)',
+    priceUSD: 'Harga USD', priceIDR: 'Harga IDR', description: 'Deskripsi', deliveryTime: 'Waktu pengerjaan',
+    recommendedFor: 'Rekomendasi untuk', period: 'Period', badge: 'Badge', popular: 'popular (1/0)', features: 'Fitur (pisah koma)',
+    name: 'Nama', icon: 'Icon', level: 'Proficiency (0-100)', category2: 'Kategori', company: 'Perusahaan', companyOrOrg: 'Perusahaan', period2: 'Periode', location: 'Lokasi', type: 'Tipe (work/education/leadership)',
+    baseUsd: 'Harga dasar USD', baseIdrNum: 'Harga dasar IDR', label: 'Label', mult: 'Multiplier', desc2: 'Deskripsi', deliv: 'Deliverables (pisah koma)',
+    email: 'Email', phone: 'Phone', wa: 'Nomor WhatsApp', avatarUrl: 'URL foto', cvIndo: 'URL CV Indonesia', cvEng: 'URL CV English',
+    instagram: 'URL Instagram', dribbble: 'URL Dribbble', behance: 'URL Behance', linkedin: 'URL LinkedIn', github: 'URL GitHub',
   };
 
-  const PACKAGE_FIELDS: Record<string, (a: any, v: string) => void> = {
-    title: (a, v) => (a.title = v),
-    name: (a, v) => (a.title = v),
-    description: (a, v) => (a.description = v),
-    priceUSD: (a, v) => (a.price_usd = Number(v) || 0),
-    priceIDR: (a, v) => (a.price = v),
-    deliveryTime: (a, v) => (a.timeline = v),
-    recommendedFor: (a, v) => (a.recommended_for = v),
-    period: (a, v) => (a.period = v),
-    badge: (a, v) => (a.badge = v),
-    popular: (a, v) => (a.is_popular = ['1', 'true', 'yes', 'ya'].includes(v.toLowerCase())),
-    features: (a, v) => (a.features = v.split(',').map((x) => x.trim())),
-  };
-
-  async function applyField(table: string, id: string, patch: Record<string, any>) {
-    const { error } = await db().from(table).update(patch).eq('id', id);
-    return !error;
-  }
-
-  // ---- main dispatcher ----
+  // ---- text commands ----
   async function handleText(chatId: number, text: string) {
     const [cmd, ...rest] = text.trim().split(/\s+/);
     const arg = rest.join(' ');
     const lower = cmd.toLowerCase();
 
-    // guided-session continuation
-    const session = sessions.get(String(chatId));
-    if (session && !lower.startsWith('/')) {
-      if (session.field === 'title') session.data.title = arg;
-      else if (session.resource === 'project') PROJECT_FIELDS[session.field]?.(session.data, arg);
-      else if (session.resource === 'package') PACKAGE_FIELDS[session.field]?.(session.data, arg);
-
-      const { error } = await db().from(session.resource + 's').upsert(session.data, { onConflict: 'id' });
-      sessions.delete(String(chatId));
-      return send(chatId, error ? `❌ Gagal simpan: ${esc(error.message)}` : `✅ ${session.resource === 'project' ? 'Proyek' : 'Paket'} tersimpan (ID: <code>${session.data.id}</code>).\n\nUpdate field lain: <code>/${session.resource} tulis ${session.data.id} &lt;field&gt;=&lt;nilai&gt;</code>`);
-    }
-
-    if (lower === '/start' || lower === '/menu') return renderMenu(chatId);
-    if (lower === '/help') {
-      return send(
-        chatId,
-        `🤖 <b>FarasBot — command</b>\n\n` +
-          `🔍 Lihat\n<code>/proyek</code> daftar proyek\n<code>/paket</code> daftar paket\n<code>/lead</code> lead belum dibaca\n<code>/skill</code> keahlian\n<code>/faq</code> FAQ\n<code>/stats</code> statistik\n<code>/kontak</code> kontak\n\n` +
-          `✍️ Buat\n<code>/proyek baru</code> — panduan bertahap\n<code>/paket baru</code>\n\n` +
-          `🛠 Ubah\n<code>/proyek tulis &lt;id&gt; &lt;field&gt;=&lt;nilai&gt;</code>\nfield: title, subtitle, category, client, year, role, liveUrl, thumbnail, summary, solution, tools, results, featured\n\n` +
-          `<code>/paket tulis &lt;id&gt; &lt;field&gt;=&lt;nilai&gt;</code>\nfield: title, priceUSD, priceIDR, deliveryTime, recommendedFor, badge, popular, features\n\n` +
-          `🗑 Hapus\n<code>/proyek hapus &lt;id&gt;</code>\n<code>/paket hapus &lt;id&gt;</code>\n<code>/lead baca &lt;id&gt;</code> · <code>/lead hapus &lt;id&gt;</code>`
-      );
-    }
-
-    if (lower === '/proyek') {
-      if (!arg) return showProjects(chatId);
-      if (arg.startsWith('baru')) {
-        sessions.set(String(chatId), { resource: 'project', field: 'title', data: { id: 'proj-' + Date.now(), title: '', category: 'UI/UX Design', featured: false } });
-        return send(chatId, '✍️ Buat proyek baru.\nLangkah 1/2: kirim <b>judul proyek</b>.');
-      }
-      if (arg.startsWith('tulis')) {
-        const [, id, kv] = arg.split(/\s+/);
-        const eq = kv?.indexOf('=');
-        if (!id || eq == null || eq <= 0) return send(chatId, 'Format: <code>/proyek tulis &lt;id&gt; &lt;field&gt;=&lt;nilai&gt;</code>');
-        const field = kv.slice(0, eq);
-        const value = kv.slice(eq + 1);
-        const patch: any = {};
-        PROJECT_FIELDS[field]?.(patch, value);
-        if (!Object.keys(patch).length) return send(chatId, `Field <code>${field}</code> tidak dikenal.`);
-        const ok = await applyField('projects', id, { ...patch, updated_at: new Date().toISOString() });
-        return send(chatId, ok ? `✅ Proyek <code>${id}</code> diperbarui.` : `❌ Gagal update (ID <code>${id}</code> tidak ditemukan?).`);
-      }
-      if (arg.startsWith('hapus')) {
-        const id = arg.split(/\s+/)[1];
-        if (!id) return send(chatId, 'Format: <code>/proyek hapus &lt;id&gt;</code>');
-        const { error } = await db().from('projects').delete().eq('id', id);
-        return send(chatId, error ? `❌ ${esc(error.message)}` : `🗑 Proyek <code>${id}</code> dihapus.`);
-      }
-      const p = await db().from('projects').select('*').eq('id', arg.replace('tulis', '').trim()).maybeSingle();
-      if (p.data) {
-        const x = p.data;
-        await send(
-          chatId,
-          `<b>${esc(x.title)}</b> [${esc(x.category)}] ${x.featured ? '⭐' : ''}\n` +
-            `Client: ${esc(x.client || '-')} · ${esc(x.year || '-')}\n` +
-            `Ringkas: ${esc(cap(x.summary || '-'))}\n` +
-            `Results: ${(x.results || []).join(', ') || '-'}\nTools: ${(x.tools || []).join(', ') || '-'}\n` +
-            `${x.live_url ? '🔗 ' + esc(x.live_url) : ''}`
-        );
-      }
+    const sess = getSession(chatId);
+    if (sess && lower !== '/batal' && lower !== '/cancel' && lower !== '/menu') {
+      const ok = await onSessionValue(chatId, sess, text);
+      if (ok) clearSession(chatId);
       return;
     }
+    clearSession(chatId);
 
-    if (lower === '/paket') {
-      if (!arg) return showPackages(chatId);
-      if (arg.startsWith('baru')) {
-        sessions.set(String(chatId), { resource: 'package', field: 'title', data: { id: 'pkg-' + Date.now(), title: '', price: '', price_usd: 0 } });
-        return send(chatId, '✍️ Buat paket baru.\nLangkah: kirim <b>nama paket</b>.\n\nLanjut update: <code>/paket tulis &lt;id&gt; &lt;field&gt;=&lt;nilai&gt;</code>');
+    switch (lower) {
+      case '/start':
+      case '/menu':
+        return mainMenu(chatId);
+      case '/help':
+        return send(chatId, `<b>FarasBot 2.0</b>\n\n` +
+          'Menu interaktif: tap tombol di setiap pesan.\n\n' +
+          '<code>/menu</code> panel utama\n<code>/proyek</code> daftar proyek\n<code>/paket</code> daftar paket\n<code>/lead</code> lead belum dibaca\n' +
+          '<code>/stats</code> statistik\n<code>/konten</code> edit konten halaman\n' +
+          '<b>Langsung edit:</b> <code>/proyek tulis &lt;id&gt; field=value</code>\n<code>/paket tulis &lt;id&gt; field=value</code>\n' +
+          '<code>/konten home hero.title = Teks baru</code>\n<code>/batal</code> batalkan alur.');
+      case '/proyek':
+        if (arg.startsWith('tulis')) return handleTulis(chatId, arg, 'projects', PROJECT_FIELDS, 'proyek');
+        if (arg) return showProjects(chatId);
+        return showProjects(chatId);
+      case '/paket':
+        if (arg.startsWith('tulis')) return handleTulis(chatId, arg, 'packages', PACKAGE_FIELDS, 'paket');
+        return showPackages(chatId);
+      case '/skill':
+        return showSkillList(chatId, 0);
+      case '/lead':
+        return showLeads(chatId);
+      case '/stats':
+        return stats(chatId);
+      case '/konten': {
+        if (arg) {
+          const m = arg.match(/^(\S+)\s+([\w.]+)\s*=\s*(.+)$/);
+          if (m) {
+            const page = m[1];
+            const k = m[2].split('.');
+            const section = k[0];
+            const field = k[1];
+            const value = m[3];
+            const { data: rows } = await db().from('page_content').select('*').eq('page', page).eq('section', section).eq('field', field).limit(1);
+            if (rows && rows[0]) {
+              const ok = await patchRow('page_content', rows[0].id, { values: { ...rows[0].values, en: value }, updated_at: new Date().toISOString() });
+              return send(chatId, ok ? `✅ Konten ${page}.${section}.${field} (en) tersimpan.` : '❌ Gagal simpan.');
+            }
+            return send(chatId, 'Field tidak ditemukan. Tap dari menu <code>/konten</code> biar lihat daftarnya.');
+          }
+          return showContentPage(chatId, arg);
+        }
+        return showContentPage(chatId, 'home');
       }
-      if (arg.startsWith('tulis')) {
-        const [, id, kv] = arg.split(/\s+/);
-        const eq = kv?.indexOf('=');
-        if (!id || eq == null || eq <= 0) return send(chatId, 'Format: <code>/paket tulis &lt;id&gt; &lt;field&gt;=&lt;nilai&gt;</code>');
-        const field = kv.slice(0, eq);
-        const value = kv.slice(eq + 1);
-        const patch: any = {};
-        PACKAGE_FIELDS[field]?.(patch, value);
-        if (!Object.keys(patch).length) return send(chatId, `Field <code>${field}</code> tidak dikenal.`);
-        const ok = await applyField('packages', id, patch);
-        return send(chatId, ok ? `✅ Paket <code>${id}</code> diperbarui.` : `❌ Gagal update.`);
-      }
-      if (arg.startsWith('hapus')) {
-        const id = arg.split(/\s+/)[1];
-        if (!id) return send(chatId, 'Format: <code>/paket hapus &lt;id&gt;</code>');
-        const { error } = await db().from('packages').delete().eq('id', id);
-        return send(chatId, error ? `❌ ${esc(error.message)}` : `🗑 Paket <code>${id}</code> dihapus.`);
-      }
+      case '/batal':
+      case '/cancel':
+        return send(chatId, 'Alur dibatalkan.');
+      default:
+        return mainMenu(chatId);
     }
-
-    if (lower === '/lead') {
-      if (arg.startsWith('baca')) {
-        const id = arg.split(/\s+/)[1];
-        if (!id) return send(chatId, 'Format: <code>/lead baca &lt;id&gt;</code>');
-        const ok = await applyField('messages', id, { status: 'read' });
-        return send(chatId, ok ? `✅ Lead <code>${id}</code> ditandai dibaca.` : `❌ Gagal.`);
-      }
-      if (arg.startsWith('hapus')) {
-        const id = arg.split(/\s+/)[1];
-        if (!id) return send(chatId, 'Format: <code>/lead hapus &lt;id&gt;</code>');
-        const { error } = await db().from('messages').delete().eq('id', id);
-        return send(chatId, error ? `❌ ${esc(error.message)}` : `🗑 Lead <code>${id}</code> dihapus.`);
-      }
-      return showLeads(chatId);
-    }
-
-    if (lower === '/skill') return showSkills(chatId);
-    if (lower === '/faq') return showFaqs(chatId);
-    if (lower === '/stats') return showStats(chatId);
-    if (lower === '/kontak') return showContact(chatId);
-
-    await renderMenu(chatId);
   }
 
-  // ---- webhook route ----
+  async function handleTulis(chatId: number, arg: string, table: string, fields: Record<string, (r: any, v: string) => void>, label: string) {
+    const [, id, kv] = arg.split(/\s+/);
+    const eq = kv?.indexOf('=');
+    if (!id || eq == null || eq <= 0) return send(chatId, `Format: <code>/${label} tulis &lt;id&gt; &lt;field&gt;=&lt;nilai&gt;</code>`);
+    const field = kv.slice(0, eq);
+    const value = kv.slice(eq + 1);
+    const patch: any = {};
+    fields[field]?.(patch, value);
+    if (!Object.keys(patch).length) return send(chatId, `Field <code>${field}</code> tidak dikenal.`);
+    const ok = await patchRow(table, id, { ...patch, updated_at: new Date().toISOString() });
+    return send(chatId, ok ? `✅ ${label} <code>${id}</code> diperbarui.` : `❌ Gagal (ID <code>${id}</code>?)`);
+  }
+
+  async function onSessionValue(chatId: number, sess: { mode: string; data: any }, value: string): Promise<boolean> {
+    const d = sess.data;
+    switch (sess.mode) {
+      case 'proj_new_title': {
+        d.id = 'proj-' + Date.now(); d.title = value;
+        setSession(chatId, { mode: 'proj_fld', data: { ...d, field: 'category' } });
+        await send(chatId, `✏️ Judul tersimpan: <b>${cap2(value, 60)}</b>\n\nKirim <b>kategori</b> (UI/UX Design, Graphic & Brand, Social Media & Print, Mobile App):${HINT}`);
+        return true;
+      }
+      case 'proj_fld': {
+        const patch: any = {};
+        PROJECT_FIELDS[d.field]?.(patch, value);
+        const ok = await upsert('projects', { ...d, updated_at: new Date().toISOString(), ...patch });
+        if (!ok) {
+          await send(chatId, '❌ Gagal simpan. Coba lagi atau /batal.');
+          return false;
+        }
+        setSession(chatId, { mode: 'proj_fld', data: { ...d, ...patch, field: 'next' } });
+        await send(chatId, `✅ <code>${esc(d.field)}</code> tersimpan.\n\n` +
+          'Lanjut isi field lain? Balas:\n<code>title</code> untuk judul\n<code>category</code> kategori\n<code>summary</code>) ringkasan\n<code>client</code> client\n<code>year</code> tahun\n<code>thumbnail</code> URL foto\n<code>selesai</code> untuk selesai.', kb([
+            [{ text: '✏️ Judul', callback_data: `proj:fld:${d.id}:title` }, { text: '📎 Thumb', callback_data: `proj:fld:${d.id}:thumbnail` }],
+            [{ text: '✅ Selesai', callback_data: 'proj:list:0' }],
+          ]));
+        return true;
+      }
+      case 'pkg_new_title': {
+        d.id = 'pkg-' + Date.now(); d.title = value;
+        await upsert('packages', d);
+        setSession(chatId, { mode: 'pkg_fld', data: d });
+        await send(chatId, `✅ Paket <b>${cap2(value, 50)}</b> dibuat (ID <code>${d.id}</code>).\nLanjut isi field dengan /paket tulis ${d.id} field=nilai, atau balas: ${HINT}`, kb([[{ text: '💲 Harga', callback_data: `pkg:fld:${d.id}:priceUSD` }, { text: '✅ Selesai', callback_data: 'pkg:list:0' }]]));
+        return true;
+      }
+      case 'pkg_fld': {
+        const patch: any = {};
+        PACKAGE_FIELDS[d.field]?.(patch, value);
+        const ok = await upsert('packages', { ...d, updated_at: new Date().toISOString(), ...patch });
+        if (!ok) return Promise.resolve(send(chatId, '❌ Gagal simpan.').then(() => false));
+        setSession(chatId, { mode: 'pkg_fld', data: { ...d, ...patch } });
+        await send(chatId, `✅ <code>${d.field}</code> tersimpan.`);
+        return true;
+      }
+      case 'fldint': {
+        const ok = await patchRow(d.table, d.id, d.apply(value));
+        await send(chatId, ok ? `✅ ${d.label} diperbarui.` : '❌ Gagal simpan.');
+        return true;
+      }
+      case 'cont_fld': {
+        const ok = await patchRow('page_content', d.id, { values: { ...d.values, [d.lang]: value }, updated_at: new Date().toISOString() });
+        await send(chatId, ok ? `✅ Konten ${d.page}/${d.section}.${d.field} (${d.lang}) tersimpan.` : '❌ Gagal simpan.');
+        return true;
+      }
+      case 'set_fld': {
+        const field = d.field;
+        const patch: any = {};
+        if (field === 'email') patch.contact_email = value;
+        else if (field === 'phone') patch.contact_phone = value;
+        else if (field === 'wa') patch.whatsapp_number = value;
+        else if (field === 'avatarUrl') patch.avatar_url = value;
+        else if (field === 'cvIndo') patch.cv_download_url_indo = value;
+        else if (field === 'cvEng') patch.cv_download_url_eng = value;
+        else if (['instagram', 'dribbble', 'behance', 'linkedin', 'github'].includes(field)) {
+          const { data: rows } = await db().from('site_settings').select('social_links').eq('id', 'default').maybeSingle();
+          const current = rows?.social_links || {};
+          patch.social_links = { ...current, [field]: value };
+        } else return false;
+        const ok = await patchRow('site_settings', 'default', { ...patch, updated_at: new Date().toISOString() });
+        await send(chatId, ok ? `✅ Pengaturan <code>${field}</code> tersimpan.` : '❌ Gagal simpan.');
+        return true;
+      }
+      case 'pin_cur': {
+        setSession(chatId, { mode: 'pin_new', data: { cur: value } });
+        await send(chatId, 'Kirim <b>PIN baru</b> (min. 6 karakter):');
+        return true;
+      }
+      case 'pin_new': {
+        const d2 = sess.data;
+        if (value.length < 6) { await send(chatId, 'Minimal 6 karakter. Coba lagi atau /batal.'); return false; }
+        if (value === d2.cur) { await send(chatId, 'PIN baru harus berbeda. /batal.'); return false; }
+        // verify current via public endpoint, then change with admin token
+        const ver = await tgReq2('adminVerify', d2.cur);
+        if (!ver.ok) { await send(chatId, '❌ PIN saat ini salah. /batal.'); return false; }
+        const ch = await tgReq2('adminChangePin', d2.cur, value);
+        await send(chatId, ch.ok ? '✅ PIN admin berhasil diganti.' : `❌ Gagal: ${ch.error || ''}`);
+        return true;
+      }
+      default:
+        return false;
+    }
+  }
+
+  // server-call equivalents for PIN flows (no extra serverless hop needed—same function)
+  async function tgReq2(kind: string, a: string, b?: string) {
+    try {
+      if (kind === 'adminVerify') {
+        const ok = await (requireAdminCheck(a));
+        return { ok };
+      }
+      if (kind === 'adminChangePin') {
+        const ok = await adminMatcher(a);
+        if (!ok) return { ok: false, error: 'PIN saat ini salah' };
+        const saved = await savePinHash(b || '');
+        return { ok: saved };
+      }
+      return { ok: false };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  // ---------- callback router ----------
+  async function handleCallback(chatId: number, data: string) {
+    const [a, b, c, ...rest] = data.split(':');
+    if (a === 'menu') return mainMenu(chatId);
+    if (a === 'noop') return;
+
+    if (a === 'proj') {
+      if (b === 'list') return showProjects(chatId, Number(c) || 0);
+      if (b === 'sel') return showProjectDetail(chatId, c);
+      if (b === 'new') {
+        setSession(chatId, { mode: 'proj_new_title', data: {} });
+        return send(chatId, '✍️ <b>Buat proyek baru</b>\nKirim <b>judul proyek</b> atau /batal.');
+      }
+      if (b === 'fld') {
+        setSession(chatId, { mode: 'proj_fld', data: { id: c, field: rest[0] } });
+        return send(chatId, `✏️ ${fieldPrompt[rest[0]] || rest[0]}\nKirim nilai baru${HINT}`);
+      }
+      if (b === 'del') {
+        const ok = await removeRow('projects', c);
+        return send(chatId, ok ? `🗑 Proyek <code>${c}</code> dihapus.` : '❌ Gagal hapus.');
+      }
+    }
+    if (a === 'pkg') {
+      if (b === 'list') return showPackages(chatId, Number(c) || 0);
+      if (b === 'sel') return showPackageDetail(chatId, c);
+      if (b === 'new') {
+        setSession(chatId, { mode: 'pkg_new_title', data: {} });
+        return send(chatId, '✍️ <b>Buat paket baru</b>\nKirim <b>nama paket</b> atau /batal.');
+      }
+      if (b === 'fld') {
+        setSession(chatId, { mode: 'fldint', data: { table: 'packages', id: c, field: rest[0], label: `Paket ${rest[0]}`, apply: (v: string) => { const p: any = {}; PACKAGE_FIELDS[rest[0]]?.(p, v); return p; } } });
+        return send(chatId, `✏️ ${fieldPrompt[rest[0]] || rest[0]}\nKirim nilai baru${HINT}`);
+      }
+      if (b === 'del') {
+        const ok = await removeRow('packages', c);
+        return send(chatId, ok ? `🗑 Paket <code>${c}</code> dihapus.` : '❌ Gagal hapus.');
+      }
+    }
+    if (a === 'svc') {
+      if (b === 'list') return showServices(chatId, Number(c) || 0);
+      if (b === 'sel') return showServiceDetail(chatId, c);
+      if (b === 'new') {
+        const id = 'srv-' + Date.now();
+        await upsert('services', { id, icon: 'Sparkles', title: 'Layanan Baru', description: 'Deskripsi', deliverables: [], created_at: new Date().toISOString() });
+        return showServiceDetail(chatId, id);
+      }
+      if (b === 'fld') {
+        setSession(chatId, { mode: 'fldint', data: { table: 'services', id: c, field: rest[0], label: `Layanan ${rest[0]}`, apply: (v: string) => {
+          const p: any = {};
+          if (rest[0] === 'title') p.title = v;
+          else if (rest[0] === 'description') p.description = v;
+          else if (rest[0] === 'icon') p.icon = v;
+          else if (rest[0] === 'deliv') p.deliverables = v.split(',').map((x) => x.trim());
+          return p;
+        } } });
+        return send(chatId, `✏️ ${fieldPrompt[rest[0]] || rest[0]}\nKirim nilai baru${HINT}`);
+      }
+      if (b === 'del') {
+        const ok = await removeRow('services', c);
+        return send(chatId, ok ? `🗑 Layanan <code>${c}</code> dihapus.` : '❌ Gagal hapus.');
+      }
+    }
+    if (a === 'sk') {
+      if (b === 'list') return showSkillList(chatId, Number(c) || 0);
+      if (b === 'sel') return showSkillDetail(chatId, c);
+      if (b === 'new') {
+        const id = 'sk-' + Date.now();
+        await upsert('skills', { id, name: 'Skill Baru', category: 'Design Tools', level: 80, icon: 'Figma', created_at: new Date().toISOString() });
+        return showSkillList(chatId, 0);
+      }
+      if (b === 'fld') {
+        setSession(chatId, { mode: 'fldint', data: { table: 'skills', id: c, field: rest[0], label: `Skill ${rest[0]}`, apply: (v: string) => {
+          const p: any = {};
+          if (rest[0] === 'name') p.name = v;
+          else if (rest[0] === 'category') p.category = v;
+          else if (rest[0] === 'level') p.level = Number(v) || 0;
+          else if (rest[0] === 'icon') p.icon = v;
+          return p;
+        } } });
+        return send(chatId, `✏️ ${fieldPrompt[rest[0]] || rest[0]}\nKirim nilai baru${HINT}`);
+      }
+      if (b === 'del') {
+        const ok = await removeRow('skills', c);
+        return send(chatId, ok ? `🗑 Skill dihapus.` : '❌ Gagal hapus.');
+      }
+    }
+    if (a === 'xp') {
+      if (b === 'list') return showExperienceList(chatId, Number(c) || 0);
+      if (b === 'sel') return showExperienceDetail(chatId, c);
+      if (b === 'new') {
+        const id = 'exp-' + Date.now();
+        await upsert('experiences', { id, type: 'work', period: '2026 - Present', role: 'Role Baru', company: 'Perusahaan Baru', description: 'Deskripsi', highlights: [], created_at: new Date().toISOString() });
+        return showExperienceDetail(chatId, id);
+      }
+      if (b === 'fld') {
+        setSession(chatId, { mode: 'fldint', data: { table: 'experiences', id: c, field: rest[0], label: `Pengalaman ${rest[0]}`, apply: (v: string) => {
+          const p: any = {};
+          if (rest[0] === 'role') p.role = v;
+          else if (rest[0] === 'company') p.company = v;
+          else if (rest[0] === 'period') p.period = v;
+          else if (rest[0] === 'location') p.location = v;
+          else if (rest[0] === 'description') p.description = v;
+          else if (rest[0] === 'type') p.type = v;
+          else if (rest[0] === 'highlights') p.highlights = v.split(',').map((x) => x.trim());
+          return p;
+        } } });
+        return send(chatId, `✏️ ${fieldPrompt[rest[0]] || rest[0]}\nKirim nilai baru${HINT}`);
+      }
+      if (b === 'del') {
+        const ok = await removeRow('experiences', c);
+        return send(chatId, ok ? '🗑 Pengalaman dihapus.' : '❌ Gagal hapus.');
+      }
+    }
+    if (a === 'est') {
+      if (b === 'main') return estimatorMenu(chatId);
+      if (b === 'svc') return showEstServices(chatId, Number(c) || 0);
+      if (b === 'scop') return showEstScopes(chatId);
+      if (b === 'tl') return showEstTimelines(chatId);
+      if (b === 'fld') {
+        setSession(chatId, { mode: 'fldint', data: { table: rest[0], id: c, field: rest[1], label: 'Estimator', apply: (v: string) => {
+          const p: any = {};
+          if (rest[1] === 'name') p.name = v;
+          else if (rest[1] === 'baseUsd') p.base_usd = Number(v) || 0;
+          else if (rest[1] === 'baseIdrNum') p.base_idr = Number(v) || 0;
+          else if (rest[1] === 'label') p.label = v;
+          else if (rest[1] === 'mult') p.mult = Number(v) || 1;
+          else if (rest[1] === 'desc') p.description = v;
+          return p;
+        } } });
+        return send(chatId, `✏️ ${fieldPrompt[rest[1]] || rest[1]} (${rest[0]}:<code>${c}</code>)\nKirim nilai baru${HINT}`);
+      }
+      if (b === 'add') {
+        const id = (rest[0] === 'estimator_services' ? 'svc-' : rest[0] === 'estimator_scopes' ? 'scp-' : 'tl-') + Date.now();
+        if (rest[0] === 'estimator_services') await upsert('estimator_services', { id, name: 'Layanan Baru', base_usd: 200, base_idr: 3000000, icon: 'Sparkles', deliverables: [], created_at: new Date().toISOString() });
+        else if (rest[0] === 'estimator_scopes') await upsert('estimator_scopes', { id, label: 'Skop Baru', mult: 1, description: '', created_at: new Date().toISOString() });
+        else await upsert('estimator_timelines', { id, label: 'Durasi Baru', mult: 1, created_at: new Date().toISOString() });
+        return estimatorMenu(chatId);
+      }
+      if (b === 'del') {
+        const ok = await removeRow(rest[0], c);
+        return send(chatId, ok ? '🗑 Dihapus.' : '❌ Gagal hapus.');
+      }
+    }
+    if (a === 'cont') {
+      if (b === 'page') return showContentPage(chatId, c || 'home');
+      if (b === 'fld') return showContentField(chatId, c, rest[0]);
+      if (b === 'fld_lang') {
+        const [page, section, field, lang, sort] = c.split('__');
+        const { data: rows } = await db().from('page_content').select('*').eq('page', page).eq('section', section).eq('field', field).limit(5);
+        const row = rows?.[0] || { id: `${page}__${section}__${field}__${sort || 0}`, page, section, field, type: 'text', sort: Number(sort) || 0, values: {}, updated_at: new Date().toISOString() };
+        setSession(chatId, { mode: 'cont_fld', data: { id: row.id, page, section, field, lang, values: row.values } });
+        return send(chatId, `📝 Edit <code>${c}</code> bahasa <b>${lang.toUpperCase()}</b>\nKirim nilai baru${HINT}`);
+      }
+      if (b === 'share') return contentShare(chatId);
+    }
+    if (a === 'faq') {
+      if (b === 'list') return showFaqList(chatId, Number(c) || 0);
+      if (b === 'sel') return showFaqDetail(chatId, c);
+      if (b === 'new') {
+        const id = 'faq-' + Date.now();
+        await upsert('faqs', { id, sort: Math.floor(Date.now() / 1000), question: { en: 'Pertanyaan baru?' }, answer: { en: 'Jawaban' }, created_at: new Date().toISOString() });
+        return showFaqDetail(chatId, id);
+      }
+      if (b === 'q') {
+        setSession(chatId, { mode: 'fldint', data: { table: 'faqs', id: c, field: 'question', label: 'FAQ pertanyaan', apply: (v: string) => ({ question: { en: v } }) } });
+        return send(chatId, `✏️ Pertanyaan baru${HINT}`);
+      }
+      if (b === 'a') {
+        setSession(chatId, { mode: 'fldint', data: { table: 'faqs', id: c, field: 'answer', label: 'FAQ jawaban', apply: (v: string) => ({ answer: { en: v } }) } });
+        return send(chatId, `✏️ Jawaban baru${HINT}`);
+      }
+      if (b === 'del') {
+        const ok = await removeRow('faqs', c);
+        return send(chatId, ok ? '🗑 FAQ dihapus.' : '❌ Gagal hapus.');
+      }
+    }
+    if (a === 'lead') {
+      if (b === 'list') return showLeads(chatId);
+      if (b === 'read') {
+        const ok = await patchRow('messages', c, { status: 'read' });
+        return send(chatId, ok ? `✅ Lead <code>${c}</code> dibaca.` : '❌ Gagal.');
+      }
+      if (b === 'del') {
+        const ok = await removeRow('messages', c);
+        return send(chatId, ok ? `🗑 Lead <code>${c}</code> dihapus.` : '❌ Gagal.');
+      }
+    }
+    if (a === 'stats') return stats(chatId);
+    if (a === 'set') {
+      if (b === 'main') return settingsMenu(chatId);
+      if (b === 'fld') {
+        setSession(chatId, { mode: 'set_fld', data: { field: c } });
+        return send(chatId, `✏️ ${fieldPrompt[c] || c}\nKirim nilai baru (URL/teks)${HINT}`);
+      }
+    }
+    if (a === 'pin') {
+      if (b === 'start') {
+        setSession(chatId, { mode: 'pin_cur', data: {} });
+        return send(chatId, '🔑 Ganti PIN admin.\nKirim <b>PIN saat ini</b> dulu:');
+      }
+    }
+    return mainMenu(chatId);
+  }
+
+  // ---------- views ----------
+  async function showPackages(chatId: number, page = 0) {
+    const items = await packageRows();
+    if (!items.length) return send(chatId, '🎁 <b>Paket</b>\nBelum ada.', kb([[{ text: '➕ Buat baru', callback_data: 'pkg:new' }, { text: '⬅️ Menu', callback_data: 'menu' }]]));
+    const rows: any[][] = items.slice(page * 6, page * 6 + 6).map((p) => [{ text: `🎁 ${cap2(p.title, 30)}`, callback_data: `pkg:sel:${p.id}` }]);
+    const nav: any[] = [];
+    if (page > 0) nav.push({ text: '‹ Prev', callback_data: `pkg:list:${page - 1}` });
+    if ((page + 1) * 6 < items.length) nav.push({ text: 'Next ›', callback_data: `pkg:list:${page + 1}` });
+    if (nav.length) rows.push(nav);
+    rows.push([{ text: '➕ Buat baru', callback_data: 'pkg:new' }, { text: '⬅️ Menu', callback_data: 'menu' }]);
+    return send(chatId, `🎁 <b>Paket (${items.length})</b>`, kb(rows));
+  }
+  async function showPackageDetail(chatId: number, id: string) {
+    const { data: rows } = await db().from('packages').select('*').eq('id', id).maybeSingle();
+    const p: any = rows;
+    if (!p) return send(chatId, 'Paket tidak ditemukan.');
+    await send(chatId, `<b>${esc(p.title || '')}</b>\n${p.price_usd ? '$' + p.price_usd + ' USD' : ''}${p.price ? ' / ' + esc(p.price) : ''}\n${esc(cap2(p.description || ''))}\nFeatures: ${(p.features || []).length} item`, kb([
+      [
+        { text: '💲 USD', callback_data: `pkg:fld:${p.id}:priceUSD` },
+        { text: '💳 IDR', callback_data: `pkg:fld:${p.id}:priceIDR` },
+        { text: '⏱ Waktu', callback_data: `pkg:fld:${p.id}:deliveryTime` },
+      ],
+      [
+        { text: '✏️ Fitur', callback_data: `pkg:fld:${p.id}:features` },
+        { text: '✏️ Desc', callback_data: `pkg:fld:${p.id}:description` },
+        { text: '🏷 Badge', callback_data: `pkg:fld:${p.id}:badge` },
+      ],
+      [
+        { text: '🗑 Hapus', callback_data: `pkg:del:${p.id}` },
+        { text: '⬅️ Kembali', callback_data: 'pkg:list:0' },
+      ],
+    ]));
+  }
+  async function showServices(chatId: number, page = 0) {
+    const { rows } = await fetchAll('services', 'created_at');
+    if (!rows.length) return send(chatId, '✨ <b>Layanan</b>\nBelum ada.', kb([[{ text: '➕ Tambah', callback_data: 'svc:new' }, { text: '⬅️ Menu', callback_data: 'menu' }]]));
+    const r: any[][] = rows.slice(page * 6, page * 6 + 6).map((s) => [{ text: `✨ ${cap2(s.title, 30)}`, callback_data: `svc:sel:${s.id}` }]);
+    const nav: any[] = [];
+    if (page > 0) nav.push({ text: '‹ Prev', callback_data: `svc:list:${page - 1}` });
+    if ((page + 1) * 6 < rows.length) nav.push({ text: 'Next ›', callback_data: `svc:list:${page + 1}` });
+    if (nav.length) r.push(nav);
+    r.push([{ text: '➕ Tambah', callback_data: 'svc:new' }, { text: '⬅️ Menu', callback_data: 'menu' }]);
+    return send(chatId, `✨ <b>Layanan (${rows.length})</b>`, kb(r));
+  }
+  async function showServiceDetail(chatId: number, id: string) {
+    const { data: rows } = await db().from('services').select('*').eq('id', id).maybeSingle();
+    const s: any = rows;
+    if (!s) return send(chatId, 'Layanan tidak ditemukan.');
+    await send(chatId, `<b>${esc(s.title || '')}</b>\n${esc(cap2(s.description || ''))}\nDeliverables: ${(s.deliverables || []).join(', ') || '-'}\nID: <code>${s.id}</code>`, kb([
+      [
+        { text: '✏️ Judul', callback_data: `svc:fld:${s.id}:title` },
+        { text: '✏️ Desc', callback_data: `svc:fld:${s.id}:description` },
+        { text: '📦 Deliverables', callback_data: `svc:fld:${s.id}:deliv` },
+      ],
+      [
+        { text: '🗑 Hapus', callback_data: `svc:del:${s.id}` },
+        { text: '⬅️ Kembali', callback_data: 'svc:list:0' },
+      ],
+    ]));
+  }
+  async function showSkillList(chatId: number, page = 0) {
+    const { rows } = await fetchAll('skills', 'created_at');
+    if (!rows.length) return send(chatId, '🎨 <b>Skill</b>\nBelum ada.', kb([[{ text: '➕ Tambah', callback_data: 'sk:new' }, { text: '⬅️ Menu', callback_data: 'menu' }]]));
+    const r: any[][] = rows.slice(page * 6, page * 6 + 6).map((s) => [{ text: `🎨 ${cap2(s.name, 30)} — ${s.level ?? 80}%`, callback_data: `sk:sel:${s.id}` }]);
+    const nav: any[] = [];
+    if (page > 0) nav.push({ text: '‹ Prev', callback_data: `sk:list:${page - 1}` });
+    if ((page + 1) * 6 < rows.length) nav.push({ text: 'Next ›', callback_data: `sk:list:${page + 1}` });
+    if (nav.length) r.push(nav);
+    r.push([{ text: '➕ Tambah', callback_data: 'sk:new' }, { text: '⬅️ Menu', callback_data: 'menu' }]);
+    return send(chatId, `🎨 <b>Skill (${rows.length})</b>`, kb(r));
+  }
+  async function showSkillDetail(chatId: number, id: string) {
+    const { data: rows } = await db().from('skills').select('*').eq('id', id).maybeSingle();
+    const s: any = rows;
+    if (!s) return send(chatId, 'Skill tidak ditemukan.');
+    await send(chatId, `<b>${esc(s.name || '')}</b> — ${s.level ?? 80}%\n${esc(s.category || '')}\nID: <code>${s.id}</code>`, kb([
+      [
+        { text: '✏️ Nama', callback_data: `sk:fld:${s.id}:name` },
+        { text: '✏️ Kategori', callback_data: `sk:fld:${s.id}:category` },
+        { text: '📊 %', callback_data: `sk:fld:${s.id}:level` },
+      ],
+      [
+        { text: '🗑 Hapus', callback_data: `sk:del:${s.id}` },
+        { text: '⬅️ Kembali', callback_data: 'sk:list:0' },
+      ],
+    ]));
+  }
+  async function showExperienceList(chatId: number, page = 0) {
+    const { rows } = await fetchAll('experiences', 'created_at');
+    if (!rows.length) return send(chatId, '📄 <b>Pengalaman</b>\nBelum ada.', kb([[{ text: '➕ Tambah', callback_data: 'xp:new' }, { text: '⬅️ Menu', callback_data: 'menu' }]]));
+    const r: any[][] = rows.slice(page * 6, page * 6 + 6).map((x) => [{ text: `${x.type === 'education' ? '🎓' : '💼'} ${cap2(x.role, 28)} — ${esc(x.period || '')}`, callback_data: `xp:sel:${x.id}` }]);
+    const nav: any[] = [];
+    if (page > 0) nav.push({ text: '‹ Prev', callback_data: `xp:list:${page - 1}` });
+    if ((page + 1) * 6 < rows.length) nav.push({ text: 'Next ›', callback_data: `xp:list:${page + 1}` });
+    if (nav.length) r.push(nav);
+    r.push([{ text: '➕ Tambah', callback_data: 'xp:new' }, { text: '⬅️ Menu', callback_data: 'menu' }]);
+    return send(chatId, `📄 <b>Pengalaman (${rows.length})</b>`, kb(r));
+  }
+  async function showExperienceDetail(chatId: number, id: string) {
+    const { data: rows } = await db().from('experiences').select('*').eq('id', id).maybeSingle();
+    const x: any = rows;
+    if (!x) return send(chatId, 'Pengalaman tidak ditemukan.');
+    await send(chatId, `💼 <b>${esc(x.role || '')}</b>\n${esc(x.company || '')} · ${esc(x.period || '')}\n${esc(cap2(x.description || ''))}\nID: <code>${x.id}</code>`, kb([
+      [
+        { text: '✏️ Role', callback_data: `xp:fld:${x.id}:role` },
+        { text: '✏️ Perusahaan', callback_data: `xp:fld:${x.id}:company` },
+        { text: '✏️ Periode', callback_data: `xp:fld:${x.id}:period` },
+      ],
+      [
+        { text: '✏️ Tipe', callback_data: `xp:fld:${x.id}:type` },
+        { text: '✏️ Desc', callback_data: `xp:fld:${x.id}:description` },
+        { text: '📌 Highlight', callback_data: `xp:fld:${x.id}:highlights` },
+      ],
+      [
+        { text: '🗑 Hapus', callback_data: `xp:del:${x.id}` },
+        { text: '⬅️ Kembali', callback_data: 'xp:list:0' },
+      ],
+    ]));
+  }
+  async function estimatorMenu(chatId: number) {
+    return send(chatId, '🧮 <b>Estimator</b>\nPilih bagian:', kb([
+      [{ text: '📦 Opsi Layanan', callback_data: 'est:svc:0' }, { text: '📐 Skop', callback_data: 'est:scop:0' }],
+      [{ text: '⏱ Durasi', callback_data: 'est:tl:0' }, { text: '⬅️ Menu', callback_data: 'menu' }],
+    ]));
+  }
+  async function showEstServices(chatId: number, page = 0) {
+    const { rows } = await fetchAll('estimator_services', 'created_at');
+    if (!rows.length) return send(chatId, 'Belum ada.', kb([[{ text: '➕ Tambah', callback_data: 'est:add:estimator_services' }]]));
+    const r: any[][] = rows.slice(page * 6, page * 6 + 6).map((s) => [{ text: `📦 ${cap2(s.name, 28)} — $${s.base_usd}`, callback_data: `est:fld:${s.id}:estimator_services:name` }]);
+    const nav: any[] = [];
+    if (page > 0) nav.push({ text: '‹ Prev', callback_data: `est:svc:${page - 1}` });
+    if ((page + 1) * 6 < rows.length) nav.push({ text: 'Next ›', callback_data: `est:svc:${page + 1}` });
+    if (nav.length) r.push(nav);
+    r.push([{ text: '➕ Tambah', callback_data: 'est:add:estimator_services' }, { text: '⬅️ Estimator', callback_data: 'est:main' }]);
+    return send(chatId, `📦 <b>Opsi Layanan Estimator (${rows.length})</b>`, kb(r));
+  }
+  async function showEstScopes(chatId: number) {
+    const { rows } = await fetchAll('estimator_scopes', 'created_at');
+    const r: any[][] = rows.map((s) => [{ text: `📐 ${cap2(s.label, 24)} — ×${s.mult}`, callback_data: `est:fld:${s.id}:estimator_scopes:label` }, { text: '×', callback_data: `est:del:${s.id}:estimator_scopes` }]);
+    r.push([{ text: '➕ Tambah', callback_data: 'est:add:estimator_scopes' }, { text: '⬅️ Estimator', callback_data: 'est:main' }]);
+    return send(chatId, `📐 <b>Skop (${rows.length})</b>\nTap untuk ubah label/multiplier.`, kb(r));
+  }
+  async function showEstTimelines(chatId: number) {
+    const { rows } = await fetchAll('estimator_timelines', 'created_at');
+    const r: any[][] = rows.map((s) => [{ text: `⏱ ${cap2(s.label, 24)} — ×${s.mult}`, callback_data: `est:fld:${s.id}:estimator_timelines:label` }, { text: '×', callback_data: `est:del:${s.id}:estimator_timelines` }]);
+    r.push([{ text: '➕ Tambah', callback_data: 'est:add:estimator_timelines' }, { text: '⬅️ Estimator', callback_data: 'est:main' }]);
+    return send(chatId, `⏱ <b>Durasi (${rows.length})</b>`, kb(r));
+  }
+  async function showContentPage(chatId: number, page: string) {
+    const pages = ['home', 'about', 'portfolio', 'services', 'contact', 'footer', 'calc', 'nav', 'workflow', 'dual'];
+    const { data: rows } = await db().from('page_content').select('*').eq('page', page).order('section').order('sort');
+    if (!rows.length) return send(chatId, 'Belum ada konten halaman ini.', kb([[{ text: '⬅️ Pilih halaman', callback_data: 'cont:share' }]]));
+    const groups: Record<string, typeof rows> = {};
+    for (const r of rows) (groups[r.section] = groups[r.section] || []).push(r);
+    const lines = Object.entries(groups).map(([sec, rr]) => {
+      const fields = rr.map((x) => `<code>${x.field}</code>`).join(', ');
+      return `▸ <b>${sec}</b>: ${fields}`;
+    });
+    await send(chatId, `📝 <b>${page}</b>\nTap field untuk edit:\n${lines.join('\n')}\n\nLangsung: <code>/konten ${page} section.field = Nilai baru</code>`, kb([
+      pages.slice(0, 5).map((p) => ({ text: p.charAt(0).toUpperCase() + p.slice(1), callback_data: `cont:page:${p}` })),
+      pages.slice(5).map((p) => ({ text: p.charAt(0).toUpperCase() + p.slice(1), callback_data: `cont:page:${p}` })),
+    ]));
+    return;
+  }
+  async function showContentField(chatId: number, id: string, pageHint: string) {
+    const { data: rows } = await db().from('page_content').select('*').eq('id', id).maybeSingle();
+    const r: any = rows;
+    if (!r) return send(chatId, 'Field tidak ditemukan.');
+    const kbs: any[][] = [['en', 'id', 'ja', 'ar'].map((l) => ({ text: l.toUpperCase(), callback_data: `cont:fld_lang:${r.page}__${r.section}__${r.field}__${l}__${r.sort}` }))];
+    kbs.push([{ text: '⬅️ Kembali', callback_data: `cont:page:${r.page}` }]);
+    return send(chatId, `📝 <b>${r.page}</b> · ${r.section}.${r.field}\nEN: <code>${r.values?.en || '-'}</code>\nID: <code>${r.values?.id || '-'}</code>\n\nPilih bahasa untuk diedit:`, kb(kbs));
+  }
+  function contentShare(_chatId: number) { return Promise.resolve(); }
+  async function showFaqList(chatId: number, page = 0) {
+    const { rows } = await fetchAll('faqs', 'sort');
+    if (!rows.length) return send(chatId, '❓ <b>FAQ</b>\nBelum ada.', kb([[{ text: '➕ Tambah', callback_data: 'faq:new' }, { text: '⬅️ Menu', callback_data: 'menu' }]]));
+    const r: any[][] = rows.slice(page * 6, page * 6 + 6).map((f) => [{ text: `❓ ${cap2(f.question?.en || '', 30)}`, callback_data: `faq:sel:${f.id}` }]);
+    const nav: any[] = [];
+    if (page > 0) nav.push({ text: '‹ Prev', callback_data: `faq:list:${page - 1}` });
+    if ((page + 1) * 6 < rows.length) nav.push({ text: 'Next ›', callback_data: `faq:list:${page + 1}` });
+    if (nav.length) r.push(nav);
+    r.push([{ text: '➕ Tambah', callback_data: 'faq:new' }, { text: '⬅️ Menu', callback_data: 'menu' }]);
+    return send(chatId, `❓ <b>FAQ (${rows.length})</b>`, kb(r));
+  }
+  async function showFaqDetail(chatId: number, id: string) {
+    const { data: rows } = await db().from('faqs').select('*').eq('id', id).maybeSingle();
+    const f: any = rows;
+    if (!f) return send(chatId, 'FAQ tidak ditemukan.');
+    await send(chatId, `<b>Q:</b> ${esc(f.question?.en || '')}\n<b>A:</b> ${esc(cap2(f.answer?.en || ''))}`, kb([
+      [{ text: '✏️ Pertanyaan', callback_data: `faq:q:${f.id}` }, { text: '✏️ Jawaban', callback_data: `faq:a:${f.id}` }],
+      [{ text: '🗑 Hapus', callback_data: `faq:del:${f.id}` }, { text: '⬅️ Kembali', callback_data: 'faq:list:0' }],
+    ]));
+  }
+  async function showLeads(chatId: number) {
+    const { rows } = await fetchAll('messages', 'created_at');
+    const unread = rows.filter((m: any) => m.status !== 'read');
+    if (!unread.length) return send(chatId, '💬 <b>Lead belum dibaca</b>\nTidak ada. 🎉', kb([[{ text: '⬅️ Menu', callback_data: 'menu' }]]));
+    const r: any[][] = unread.slice(0, 8).map((m: any) => [
+      { text: `${m.name} — ${m.project_type || '-'} (${esc(m.budget || '-')})`, callback_data: `noop` },
+    ]);
+    r.push(unread.slice(0, 5).map((m: any) => ({ text: `✓ ${cap2(m.name, 12)}`, callback_data: `lead:read:${m.id}` })));
+    r.push([{ text: '⬅️ Menu', callback_data: 'menu' }]);
+    return send(chatId, `💬 <b>Lead belum dibaca (${unread.length})</b>\nTap nama untuk lihat, tombol ✓ untuk tandai baca.`, kb(r));
+  }
+  async function stats(chatId: number) {
+    const [projects, pkgs, leads] = await Promise.all([
+      (await fetchAll('projects', 'created_at')).rows,
+      (await fetchAll('packages', 'created_at')).rows,
+      (await fetchAll('messages', 'created_at')).rows,
+    ]);
+    const unread = leads.filter((m: any) => m.status !== 'read').length;
+    await send(chatId, `📊 <b>Statistik</b>\n• Proyek: ${projects.length}\n• Paket: ${pkgs.length}\n• Lead: ${leads.length} (${unread} belum dibaca)\n\nData live dari database yang sama dengan situs.`, kb([[{ text: '⬅️ Menu', callback_data: 'menu' }]]));
+  }
+  async function settingsMenu(chatId: number) {
+    const { data: rows } = await db().from('site_settings').select('*').eq('id', 'default').maybeSingle();
+    const s: any = rows || {};
+    await send(chatId, `⚙️ <b>Pengaturan Situs</b>\n📧 ${esc(s.contact_email || '-')}\n📱 ${esc(s.whatsapp_number || '-')}\n☎️ ${esc(s.contact_phone || '-')}\n\nTap untuk ubah:`, kb([
+      [
+        { text: '📧 Email', callback_data: 'set:fld:email' },
+        { text: '📱 WhatsApp', callback_data: 'set:fld:wa' },
+        { text: '☎️ Phone', callback_data: 'set:fld:phone' },
+      ],
+      [
+        { text: '🖼 Foto', callback_data: 'set:fld:avatarUrl' },
+        { text: '📄 CV ID', callback_data: 'set:fld:cvIndo' },
+        { text: '📄 CV EN', callback_data: 'set:fld:cvEng' },
+      ],
+      [
+        { text: '📸 Instagram', callback_data: 'set:fld:instagram' },
+        { text: '💠 Dribbble', callback_data: 'set:fld:dribbble' },
+        { text: '💼 LinkedIn', callback_data: 'set:fld:linkedin' },
+      ],
+      [
+        { text: '⬅️ Menu', callback_data: 'menu' },
+        { text: '🔑 Ganti PIN', callback_data: 'pin:start' },
+      ],
+    ]));
+  }
+
+  // ---------- PIN helpers (reuse existing index auth) ----------
+  async function requireAdminCheck(pin: string) {
+    const cfg = await getAdminPinConfig();
+    if (cfg) return verifyPinAgainst(pin, cfg.pin_salt, cfg.pin_hash);
+    return pin === (process.env.ADMIN_PIN || 'clay2026');
+  }
+  async function adminMatcher(pin: string) { return requireAdminCheck(pin); }
+  async function savePinHash(pin: string) { return saveAdminPin(pin); }
+
+  // ---------- routes ----------
   app.post('/api/bot/webhook', async (req, res) => {
     const secret = req.headers['x-telegram-bot-api-secret-token'];
-    if (WEBHOOK_SECRET() && secret !== WEBHOOK_SECRET()) {
+    if (WEBHOOK_SECRET2() && secret !== WEBHOOK_SECRET2()) {
       return res.status(401).json({ ok: false });
     }
     const body = req.body || {};
@@ -1199,41 +1706,29 @@ export function registerBotRoutes(app: express.Express, deps: Deps) {
       if (body.message.text) {
         await handleText(chatId, body.message.text);
       }
-    } else if (body.callback_query && body.callback_query.message) {
+    } else if (body.callback_query && body.callback_query.message && body.callback_query.data) {
       const q = body.callback_query;
       const chatId = q.message.chat.id;
       if (!canUse(chatId)) return res.json({ ok: true });
-      try {
-        await tgReq('answerCallbackQuery', { callback_query_id: q.id });
-      } catch {}
-      const data = q.data || '';
-      if (data === 'menu:projects') await showProjects(chatId);
-      else if (data === 'menu:packages') await showPackages(chatId);
-      else if (data === 'menu:leads') await showLeads(chatId);
-      else if (data === 'menu:stats') await showStats(chatId);
-      else if (data === 'menu:skills') await showSkills(chatId);
-      else if (data === 'menu:faqs') await showFaqs(chatId);
-      else if (data === 'menu:contact') await showContact(chatId);
-      else if (data.startsWith('proj:')) log('open-project', data);
-      else if (data.startsWith('leadread:')) {
-        const id = data.split(':')[1];
-        await applyField('messages', id, { status: 'read' });
-        await send(chatId, `✅ Lead <code>${id}</code> ditandai dibaca.`);
-      }
+      try { await tgReq('answerCallbackQuery', { callback_query_id: q.id }); } catch {}
+      await handleCallback(chatId, q.data);
     }
     res.json({ ok: true });
   });
 
-  // ---- register webhook (admin-only, call once after env set) ----
-  app.post('/api/bot/register', requireAdmin, async (req, res) => {
+  app.post('/api/bot/register', requireAdmin2lessAware, async (req, res) => {
     const host = (req.headers['x-forwarded-host'] as string) || '';
     const proto = (req.headers['x-forwarded-proto'] as string) || 'https';
     const url = `${proto}://${host}/api/bot/webhook`;
-    if (!BOT_TOKEN()) return res.status(501).json({ error: 'TELEGRAM_BOT_TOKEN missing.' });
-    if (!WEBHOOK_SECRET()) return res.status(501).json({ error: 'BOT_WEBHOOK_SECRET missing.' });
-    const r = await tgReq('setWebhook', { url, secret_token: WEBHOOK_SECRET(), drop_pending_updates: true });
+    if (!process.env.TELEGRAM_BOT_TOKEN) return res.status(501).json({ error: 'TELEGRAM_BOT_TOKEN missing.' });
+    if (!process.env.BOT_WEBHOOK_SECRET) return res.status(501).json({ error: 'BOT_WEBHOOK_SECRET missing.' });
+    const r = await tgReq('setWebhook', { url, secret_token: WEBHOOK_SECRET2(), drop_pending_updates: true });
     res.json({ ok: !!r?.ok, url, telegram: r });
   });
+
+  function requireAdmin2lessAware(req: express.Request, res: express.Response, next: express.NextFunction) {
+    requireAdmin(req, res, next);
+  }
 }
 
 registerBotRoutes(app, { getServerSupabase, requireAdmin, log: console.log });
