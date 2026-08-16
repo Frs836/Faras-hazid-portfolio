@@ -1118,7 +1118,8 @@ export function registerBotRoutes(app: express.Express, deps: { getServerSupabas
       case '/cancel':
         return send(chatId, 'Alur dibatalkan.');
       default:
-        return mainMenu(chatId);
+        if (lower.startsWith('/')) return mainMenu(chatId);
+        return handleLLMText(chatId, text);
     }
   }
 
@@ -1743,6 +1744,254 @@ export function registerBotRoutes(app: express.Express, deps: { getServerSupabas
       ],
     ]));
   }
+
+  // ---------- LLM chat ("admin yang bisa diajak ngobrol") ----------
+  // Adapter titik: ekspos gagal, tapi default Gemini.
+  const LLM_MODEL = () => process.env.LLM_MODEL || 'gemini-flash-latest';
+  const chatHistory = new Map<string, { role: 'user' | 'model'; text: string }[]>();
+  const pendingConfirm = new Map<string, { resource: string; query: string; label: string }>();
+
+  const confirmTexts = ['ya', 'yes', 'iya', 'oke', 'ok', 'okay', 'betul', 'hapus', 'y'];
+
+  const TOOL_META: Record<string, { desc: string; params?: any }> = {
+    list_projects: { desc: 'Daftar semua proyek portfolio' },
+    get_project: { desc: 'Lihat detail proyek', params: { query: 'string' } },
+    create_project: { desc: 'Buat proyek baru', params: { title: 'string', category: 'string', client: 'string', year: 'string', summary: 'string' } },
+    update_project: { desc: 'Ubah field proyek (cari by nama)', params: { query: 'string', field: 'string', value: 'string' } },
+    delete_project: { desc: 'Hapus proyek (butuh konfirmasi)', params: { query: 'string' } },
+    list_packages: { desc: 'Daftar paket harga' },
+    get_package: { desc: 'Detail paket', params: { query: 'string' } },
+    create_package: { desc: 'Buat paket', params: { name: 'string', priceUSD: 'number', priceIDR: 'string' } },
+    update_package: { desc: 'Ubah field paket', params: { query: 'string', field: 'string', value: 'string' } },
+    delete_package: { desc: 'Hapus paket (konfirmasi)', params: { query: 'string' } },
+    list_services: { desc: 'Daftar layanan' },
+    update_service: { desc: 'Ubah layanan', params: { query: 'string', field: 'string', value: 'string' } },
+    create_service: { desc: 'Buat layanan', params: { title: 'string' } },
+    delete_service: { desc: 'Hapus layanan (konfirmasi)', params: { query: 'string' } },
+    list_skills: { desc: 'Daftar skill' },
+    update_skill: { desc: 'Ubah skill (field: name, category, level, icon)', params: { query: 'string', field: 'string', value: 'string' } },
+    create_skill: { desc: 'Tambah skill', params: { name: 'string' } },
+    delete_skill: { desc: 'Hapus skill (konfirmasi)', params: { query: 'string' } },
+    list_experiences: { desc: 'Daftar pengalaman kerja/pendidikan' },
+    update_experience: { desc: 'Ubah pengalaman (field: role, company, period, location, description, type)', params: { query: 'string', field: 'string', value: 'string' } },
+    create_experience: { desc: 'Tambah pengalaman', params: { role: 'string', company: 'string', type: 'string' } },
+    delete_experience: { desc: 'Hapus pengalaman (konfirmasi)', params: { query: 'string' } },
+    list_certificates: { desc: 'Daftar sertifikat' },
+    update_certificate: { desc: 'Ubah sertifikat (field: title, issuer, year, image, description)', params: { query: 'string', field: 'string', value: 'string' } },
+    create_certificate: { desc: 'Tambah sertifikat', params: { title: 'string', issuer: 'string' } },
+    delete_certificate: { desc: 'Hapus sertifikat (konfirmasi)', params: { query: 'string' } },
+    list_faqs: { desc: 'Daftar FAQ' },
+    update_faq: { desc: 'Ubah FAQ (field: question, answer)', params: { query: 'string', field: 'string', value: 'string' } },
+    create_faq: { desc: 'Tambah FAQ', params: { question: 'string' } },
+    delete_faq: { desc: 'Hapus FAQ (konfirmasi)', params: { query: 'string' } },
+    list_leads: { desc: 'Daftar lead (unread saja)', params: { unread: 'boolean' } },
+    mark_lead_read: { desc: 'Tandai lead dibaca', params: { query: 'string' } },
+    delete_lead: { desc: 'Hapus lead (konfirmasi)', params: { query: 'string' } },
+    edit_content: { desc: 'Ubah konten halaman web (halaman, section, field, bahasa)', params: { page: 'string', section: 'string', field: 'string', lang: 'string', value: 'string' } },
+    update_setting: { desc: 'Ubah pengaturan situs (field: email, wa, phone, avatarUrl, cvIndo, cvEng, instagram, dribbble, behance, linkedin, github)', params: { field: 'string', value: 'string' } },
+    get_stats: { desc: 'Statistik ringkas' },
+  };
+
+  const TOOL_DECLS: any[] = Object.entries(TOOL_META).map(([name, meta]) => ({
+    name,
+    description: meta.desc,
+    parameters: {
+      type: 'OBJECT',
+      properties: Object.fromEntries(Object.entries(meta.params || {}).map(([k, t]) => [k, { type: (t === 'number' ? 'NUMBER' : t === 'boolean' ? 'BOOLEAN' : 'STRING') }])),
+      required: meta.params ? Object.keys(meta.params) : [],
+    },
+  }));
+
+  // Cari satu baris berdasarkan fragmen nama/query.
+  async function resolveRow(table: string, query: string, nameFields: string[]) {
+    const { rows } = await fetchAll(table, 'created_at');
+    const q = String(query || '').trim().toLowerCase();
+    if (!q) return null;
+    const hit = rows.find((r: any) => {
+      if (String(r.id).toLowerCase() === q) return true;
+      return nameFields.some((f) => (r[f] || '').toString().toLowerCase().includes(q));
+    });
+    return hit || null;
+  }
+
+  async function runTool(name: string, args: any): Promise<{ ok: boolean; text: string; data?: any; confirmationRequired?: boolean }> {
+    try {
+      if (name.startsWith('list_')) {
+        const table = { list_projects: 'projects', list_packages: 'packages', list_services: 'services', list_skills: 'skills', list_experiences: 'experiences', list_certificates: 'certificates', list_faqs: 'faqs' }[name];
+        const { rows } = await fetchAll(table!, 'created_at');
+        const items = rows.map((r: any) => ({ id: r.id, name: r.title || r.name || r.role || r.question?.en || '(tanpa nama)', year: r.year, category: r.category, price: r.price_usd ? '$' + r.price_usd : r.price, level: r.level, issuer: r.issuer, period: r.period }));
+        return { ok: true, text: JSON.stringify(items.slice(0, 40)), data: items };
+      }
+      if (name === 'get_project') { const r: any = await resolveRow('projects', args.query, ['title']); return { ok: !!r, text: r ? JSON.stringify(r) : 'Tidak ditemukan.' }; }
+      if (name === 'get_package') { const r: any = await resolveRow('packages', args.query, ['title']); return { ok: !!r, text: r ? JSON.stringify(r) : 'Tidak ditemukan.' }; }
+      if (name === 'create_project') {
+        const id = 'proj-' + Date.now();
+        const ok = await upsert('projects', { id, title: args.title || 'Judul Baru', category: args.category || '', client: args.client || '', year: args.year || '', summary: args.summary || '', featured: false, created_at: new Date().toISOString() });
+        return { ok, text: ok ? `Proyek "${args.title}" dibuat (${id})` : 'Gagal simpan.' };
+      }
+      if (name === 'create_package') {
+        const id = 'pkg-' + Date.now();
+        const ok = await upsert('packages', { id, title: args.name || 'Paket Baru', price_usd: args.priceUSD || 0, price: args.priceIDR || '', created_at: new Date().toISOString() });
+        return { ok, text: ok ? `Paket "${args.name}" dibuat (${id})` : 'Gagal simpan.' };
+      }
+      if (name.startsWith('create_')) {
+        const map: any = { create_service: ['services', { title: args.title }], create_skill: ['skills', { name: args.name, category: 'Design Tools', level: 80 }], create_certificate: ['certificates', { title: args.title, issuer: args.issuer || '' }], create_faq: ['faqs', { question: { en: args.question }, answer: { en: 'Jawaban' } }], create_experience: ['experiences', { role: args.role, company: args.company || '', type: args.type || 'work' }] }[name];
+        const id = (map[0] === 'experiences' ? 'exp-' : map[0] === 'skills' ? 'sk-' : name === 'create_certificate' ? 'cert-' : 'faq-') + Date.now();
+        const ok = await upsert(map[0], { id, ...map[1], created_at: new Date().toISOString() });
+        return { ok, text: ok ? `Berhasil dibuat (${id})` : 'Gagal simpan.' };
+      }
+      if (name.startsWith('update_')) {
+        const cfg: Record<string, [string, string[], any]> = {
+          update_project: ['projects', ['title', 'subtitle', 'category', 'client', 'year', 'role', 'summary', 'solution', 'thumbnail', 'tools', 'results'], PROJECT_FIELDS],
+          update_package: ['packages', ['title', 'priceUSD', 'priceIDR', 'deliveryTime', 'period', 'badge', 'description', 'features', 'popular'], PACKAGE_FIELDS],
+          update_service: ['services', ['title', 'description', 'icon'], null],
+          update_skill: ['skills', ['name', 'category', 'level', 'icon'], null],
+          update_experience: ['experiences', ['role', 'company', 'period', 'location', 'description', 'type'], null],
+          update_certificate: ['certificates', ['title', 'issuer', 'year', 'image', 'description'], null],
+          update_faq: ['faqs', ['question', 'answer'], null],
+        };
+        const [table, fields, map] = cfg[name as keyof typeof cfg] || [];
+        if (!fields.includes(args.field)) return { ok: false, text: `Field tidak dikenal. Pilih: ${fields.join(', ')}` };
+        const r: any = await resolveRow(table, args.query, table === 'projects' || table === 'packages' ? ['title'] : table === 'skills' ? ['name'] : ['title']);
+        if (!r) return { ok: false, text: `Data "${args.query}" tidak ditemukan.` };
+        const patch: any = {};
+        if (map) map[args.field]?.(patch, String(args.value));
+        else {
+          if (table === 'services') { if (args.field === 'title') patch.title = args.value; else if (args.field === 'description') patch.description = args.value; else if (args.field === 'icon') patch.icon = args.value; }
+          else if (table === 'skills') { if (args.field === 'name') patch.name = args.value; else if (args.field === 'category') patch.category = args.value; else if (args.field === 'level') patch.level = Number(args.value) || 0; else if (args.field === 'icon') patch.icon = args.value; }
+          else if (table === 'experiences') { if (args.field === 'role') patch.role = args.value; else if (args.field === 'company') patch.company = args.value; else if (args.field === 'period') patch.period = args.value; else if (args.field === 'location') patch.location = args.value; else if (args.field === 'description') patch.description = args.value; else if (args.field === 'type') patch.type = args.value; }
+          else if (table === 'certificates') { patch[args.field] = args.value; }
+          else if (table === 'faqs') { const cur: any = r.question || {}; if (args.field === 'question') patch.question = { ...cur, en: args.value }; else patch.answer = { ...(r.answer || {}), en: args.value }; }
+        }
+        const ok = await patchRow(table, r.id, { ...patch, updated_at: new Date().toISOString() });
+        return { ok, text: ok ? `"${r.title || r.name}" diperbarui: ${args.field} = ${args.value}` : 'Gagal simpan.' };
+      }
+      if (name.startsWith('delete_')) {
+        const cfg: Record<string, [string, string[]]> = {
+          delete_project: ['projects', ['title']], delete_package: ['packages', ['title']], delete_service: ['services', ['title']],
+          delete_skill: ['skills', ['name']], delete_experience: ['experiences', ['role', 'company']],
+          delete_certificate: ['certificates', ['title']], delete_faq: ['faqs', ['question']],
+        };
+        const [table, fields] = cfg[name as keyof typeof cfg] || [];
+        const r: any = await resolveRow(table, args.query, fields);
+        if (!r) return { ok: false, text: `Data "${args.query}" tidak ditemukan.` };
+        const label = r.title || r.name || r.role || r.question?.en || args.query;
+        pendingConfirm.set('global', { resource: table, query: args.query, label });
+        return { ok: true, confirmationRequired: true, text: `PERLU KONFIRMASI hapus "${label}" — minta pengguna membalas "ya".` };
+      }
+      if (name === 'list_leads') {
+        const { rows } = await fetchAll('messages', 'created_at');
+        const list = rows.filter((m: any) => args.unread !== false ? m.status !== 'read' : true).map((m: any) => ({ name: m.name, email: m.email, phone: m.phone, layanan: m.project_type, budget: m.budget, id: m.id }));
+        return { ok: true, text: JSON.stringify(list.slice(0, 10)) };
+      }
+      if (name === 'mark_lead_read') { const r: any = await resolveRow('messages', args.query, ['name']); if (!r) return { ok: false, text: 'Lead tidak ditemukan.' }; const ok = await patchRow('messages', r.id, { status: 'read' }); return { ok, text: ok ? `${r.name} ditandai dibaca.` : 'Gagal.' }; }
+      if (name === 'delete_lead') { const r: any = await resolveRow('messages', args.query, ['name']); if (!r) return { ok: false, text: 'Lead tidak ditemukan.' }; pendingConfirm.set('global', { resource: 'messages', query: args.query, label: r.name }); return { ok: true, confirmationRequired: true, text: `PERLU KONFIRMASI hapus lead "${r.name}" — minta pengguna membalas "ya".` }; }
+      if (name === 'edit_content') {
+        const { data: rows } = await db().from('page_content').select('*').eq('page', args.page).eq('section', args.section).eq('field', args.field).limit(1);
+        if (!rows || !rows[0]) return { ok: false, text: `Field ${args.page}.${args.section}.${args.field} tidak ditemukan.` };
+        const lang = args.lang || 'en';
+        const ok = await patchRow('page_content', rows[0].id, { values: { ...rows[0].values, [lang]: args.value }, updated_at: new Date().toISOString() });
+        return { ok, text: ok ? `Konten ${args.page}.${args.section}.${args.field} (${lang}) diperbarui.` : 'Gagal.' };
+      }
+      if (name === 'update_setting') {
+        const f = args.field;
+        const patch: any = {};
+        if (f === 'email') patch.contact_email = args.value;
+        else if (f === 'wa') patch.whatsapp_number = args.value;
+        else if (f === 'phone') patch.contact_phone = args.value;
+        else if (f === 'avatarUrl') patch.avatar_url = args.value;
+        else if (f === 'cvIndo') patch.cv_download_url_indo = args.value;
+        else if (f === 'cvEng') patch.cv_download_url_eng = args.value;
+        else if (['instagram', 'dribbble', 'behance', 'linkedin', 'github'].includes(f)) {
+          const { data: cur } = await db().from('site_settings').select('social_links').eq('id', 'default').maybeSingle();
+          patch.social_links = { ...(cur?.social_links || {}), [f]: args.value };
+        } else return { ok: false, text: 'Field pengaturan tidak dikenal.' };
+        const ok = await patchRow('site_settings', 'default', { ...patch, updated_at: new Date().toISOString() });
+        return { ok, text: ok ? `Pengaturan ${f} diperbarui.` : 'Gagal.' };
+      }
+      if (name === 'get_stats') {
+        const [p, pk, s, sk, l] = await Promise.all([fetchAll('projects', 'created_at'), fetchAll('packages', 'created_at'), fetchAll('services', 'created_at'), fetchAll('skills', 'created_at'), fetchAll('messages', 'created_at')]);
+        return { ok: true, text: JSON.stringify({ proyek: p.rows.length, paket: pk.rows.length, layanan: s.rows.length, skill: sk.rows.length, lead: l.rows.length, unread: l.rows.filter((x: any) => x.status !== 'read').length }) };
+      }
+      return { ok: false, text: 'Tool tidak dikenal.' };
+    } catch (e: any) {
+      return { ok: false, text: 'Error: ' + e.message };
+    }
+  }
+
+  const WORLD = 'Kamu adalah FarasBot, asisten admin pribadi portofolio Faras Hazid (Focal Hyperspace Creative). Kamu ramah, ringkas, bahasa menyesuaikan pengguna (default Indonesia). Kamu mengelola data melalui function calling. Jangan menebak jika data tidak ditemukan. Untuk aksi yang memicu konfirmasi ("PERLU KONFIRMASI"), tanyakan ke pengguna dengan nada wajar, jangan eksekusi sendiri. Jawab rapi, hindari jargon teknis.';
+
+  async function callLLM(history: { role: string; text: string }[]): Promise<{ text: string; calls?: any[] }> {
+    const provider = (process.env.LLM_PROVIDER || 'gemini').toLowerCase();
+    if (provider === 'grok') {
+      throw new Error('LLM_PROVIDER=grok belum diaktifkan; pakai gemini atau set GEMINI_API_KEY.');
+    }
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) throw new Error('GEMINI_API_KEY belum diset.');
+    const ai = new GoogleGenAI({ apiKey: key });
+    const contents = history.map((h) => ({ role: h.role, parts: [{ text: h.text }] }));
+    const res = await ai.models.generateContent({
+      model: LLM_MODEL(),
+      contents,
+      config: {
+        systemInstruction: WORLD,
+        tools: [{ functionDeclarations: TOOL_DECLS }],
+      },
+    });
+    return { text: res.text || '', calls: res.functionCalls || [] };
+  }
+
+  async function chatWithLLM(chatId: number, userText: string) {
+    const hist = chatHistory.get(String(chatId)) || [];
+    hist.push({ role: 'user', text: userText });
+    try {
+      let answer = '';
+      const contents = [...hist];
+      let loop = 0;
+      while (loop < 6) {
+        loop++;
+        const llm = await callLLM(contents);
+        if (llm.calls && llm.calls.length) {
+          const results: string[] = [];
+          for (const c of llm.calls) {
+            const res = await runTool(c.name, c.args || {});
+            results.push(`TOOL_RESULT for ${c.name}: ${res.text}`);
+          }
+          contents.push({ role: 'model', text: llm.text || '(memanggil tool…)' });
+          contents.push({ role: 'user', text: 'SYSTEM_ECOSYSTEM:\n' + results.join('\n') });
+          continue;
+        }
+        answer = llm.text.trim();
+        break;
+      }
+      if (!answer) answer = 'Maaf, aku belum dapat jawaban — coba perjelas pertanyaannya.';
+      hist.push({ role: 'model', text: answer });
+      chatHistory.set(String(chatId), hist.slice(-20));
+      await send(chatId, answer, kb([[{ text: '⬅️ Menu', callback_data: 'menu' }]]));
+    } catch (e: any) {
+      await send(chatId, `⚠️ Aku lagi ada gangguan sesaat.\n\n${esc(e.message)}`, kb([[{ text: '⬅️ Menu', callback_data: 'menu' }]]));
+    }
+  }
+
+  // intercept konfirmasi hapus ("ya" setelah bot tanya)
+  async function handleLLMText(chatId: number, text: string) {
+    const pending = pendingConfirm.get('global');
+    if (pending && confirmTexts.includes(text.trim().toLowerCase())) {
+      pendingConfirm.delete('global');
+      const row: any = await resolveRow(pending.resource, pending.query, ['title', 'name', 'role', 'question']);
+      if (!row) {
+        await send(chatId, 'Data itu sudah tidak ada di database.');
+        return true;
+      }
+      const ok = await removeRow(pending.resource, row.id);
+      await send(chatId, ok ? `🗑 Selesai — "${pending.label}" dihapus.` : 'Gagal menghapus data.');
+      return true;
+    }
+    pendingConfirm.delete('global');
+    await chatWithLLM(chatId, text);
+    return true;
+  }
+
 
   // ---------- PIN helpers (reuse existing index auth) ----------
   async function requireAdminCheck(pin: string) {
